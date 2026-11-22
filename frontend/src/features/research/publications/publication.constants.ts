@@ -2,8 +2,11 @@ import type {
   LicenseType,
   PublicationAccessType,
   PublicationFilterState,
+  PublicationSortField,
   Publisher,
   Quartile,
+  SubBucket,
+  Workflow,
 } from "./publication.type";
 
 export const ACCESS_TYPE_LABELS: Record<PublicationAccessType, string> = {
@@ -38,6 +41,32 @@ export const PUBLISHER_LABELS: Record<Publisher, string> = {
   Sage: "Sage",
   MDPI: "MDPI",
 };
+
+export const WORKFLOW_LABELS: Record<Workflow, string> = {
+  standard: "Standard",
+  non_standard: "Non-standard",
+};
+
+export const SUB_BUCKET_LABELS: Record<SubBucket, string> = {
+  CoreHybridProprietaryEnglish: "Core Hybrid Proprietary English",
+  CoreHybridSocietyEnglish: "Core Hybrid Society English",
+  CoreGold: "Core Gold",
+  CellPressGold: "Cell Press Gold",
+  CellPressHybridProprietary: "Cell Press Hybrid Proprietary",
+  CellPressHybridSociety: "Cell Press Hybrid Society",
+  CoreHybridLocalLanguage: "Core Hybrid Local Language",
+  TLSubscription: "TL Subscription",
+  TheLancetGold: "The Lancet Gold",
+};
+
+export const PUBLICATION_SORT_OPTIONS: { value: PublicationSortField; label: string }[] = [
+  { value: "id", label: "Default (ID)" },
+  { value: "title", label: "Title" },
+  { value: "acronym", label: "Acronym" },
+  { value: "yearLunched", label: "Launch year" },
+  { value: "createdAt", label: "Date added" },
+  { value: "updatedAt", label: "Last updated" },
+];
 
 export const ACCESS_TYPE_OPTIONS = Object.keys(
   ACCESS_TYPE_LABELS,

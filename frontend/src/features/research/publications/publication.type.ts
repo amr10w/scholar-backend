@@ -38,6 +38,37 @@ export type PublicationIndex = "SCIE" | "ESCI" | "SSCI";
 
 export type Workflow = "standard" | "non_standard";
 
+export type SubBucket =
+  | "CoreHybridProprietaryEnglish"
+  | "CoreHybridSocietyEnglish"
+  | "CoreGold"
+  | "CellPressGold"
+  | "CellPressHybridProprietary"
+  | "CellPressHybridSociety"
+  | "CoreHybridLocalLanguage"
+  | "TLSubscription"
+  | "TheLancetGold";
+
+export type PublicationSortField =
+  | "id"
+  | "title"
+  | "acronym"
+  | "yearLunched"
+  | "createdAt"
+  | "updatedAt";
+
+export type PublicationSortOrder = "asc" | "desc";
+
+export type PublicationErrorKind =
+  | "not_found"
+  | "unauthorized"
+  | "forbidden"
+  | "validation"
+  | "conflict"
+  | "network"
+  | "server"
+  | "unknown";
+
 export interface PublicationSubCategory {
   id: number;
   domainId: number;
@@ -88,6 +119,11 @@ export interface PublicationEditorialStat {
   acceptanceRate: DecimalString | null;
 }
 
+/**
+ * Normalized frontend publication model.
+ * Note: The backend's misspelled `yearLunched` field is mapped at the API boundary
+ * in `publication.api.ts` to `launchYear` so no UI component depends on the typo.
+ */
 export interface Publication {
   id: number;
   subCategoryId: number;
@@ -99,15 +135,17 @@ export interface Publication {
   eissn: string | null;
   issnCdrom: string | null;
   URL: string | null;
-  yearLunched: number | null;
+  launchYear: number | null;
   openAccessType: PublicationAccessType;
   specificFocusScope: string | null;
   workflow: Workflow;
   licenseType: LicenseType | null;
   journalScope: string | null;
   imprint: string | null;
-  subBucket: string | null;
-  subCategory: PublicationSubCategory;
+  subBucket: SubBucket | null;
+  createdAt: string;
+  updatedAt: string;
+  subCategory: PublicationSubCategory | null;
   // Not returned by GET /api/publications yet (it only includes subCategory)
   yearlyMetrics?: PublicationYearlyMetric[];
   pricings?: PublicationPricing[];
@@ -119,7 +157,33 @@ export interface PublicationQuery {
   search?: string;
   page?: number;
   limit?: number;
+  sortBy?: PublicationSortField;
+  sortOrder?: PublicationSortOrder;
 }
+
+/** Input payload for POST /api/publications (auth required) */
+export interface CreatePublicationInput {
+  subCategoryId: number;
+  title: string;
+  publisher: Publisher;
+  publicationType: PublicationType;
+  openAccessType: PublicationAccessType;
+  workflow: Workflow;
+  acronym?: string | null;
+  issn?: string | null;
+  eissn?: string | null;
+  issnCdrom?: string | null;
+  URL?: string | null;
+  launchYear?: number | null;
+  specificFocusScope?: string | null;
+  licenseType?: LicenseType | null;
+  journalScope?: string | null;
+  imprint?: string | null;
+  subBucket?: SubBucket | null;
+}
+
+/** Partial payload for PATCH /api/publications/:id (auth required) */
+export type UpdatePublicationInput = Partial<CreatePublicationInput>;
 
 export interface NumericRange {
   min: number;

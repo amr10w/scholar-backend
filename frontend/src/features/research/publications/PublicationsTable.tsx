@@ -12,13 +12,14 @@ import {
   formatNumber,
   latestMetric,
   primaryPricing,
+  safePublicationUrl,
   toNumber,
 } from "./publication.utils";
 
 interface PublicationsTableProps {
   publications: Publication[];
-
   currency?: string;
+  onSelectPublication?: (publication: Publication) => void;
 }
 
 const QUARTILE_STYLES: Record<Quartile, string> = {
@@ -51,6 +52,7 @@ const alignClass = {
 const PublicationsTable = ({
   publications,
   currency,
+  onSelectPublication,
 }: PublicationsTableProps) => (
   <div className="w-full overflow-x-auto rounded-2xl border border-neutral-500">
     <table className="w-full min-w-5xl border-collapse text-sm">
@@ -75,6 +77,7 @@ const PublicationsTable = ({
           const pricing = primaryPricing(publication, currency);
           const quartile = metric?.quartile ?? null;
           const acceptanceRate = toNumber(editorial?.acceptanceRate ?? null);
+          const externalUrl = safePublicationUrl(publication.URL);
 
           return (
             <tr
@@ -83,27 +86,38 @@ const PublicationsTable = ({
             >
               <td className="px-4 py-3 min-w-72">
                 <div className="flex flex-col gap-0.5">
-                  {publication.URL ? (
-                    <a
-                      href={publication.URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-neutral-50 hover:text-accent-200 inline-flex items-start gap-1.5 group"
-                    >
-                      <span>{publication.title}</span>
-                      <ExternalLink className="size-3.5 mt-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
-                    </a>
-                  ) : (
-                    <span className="font-medium text-neutral-50">
-                      {publication.title}
-                    </span>
-                  )}
+                  <div className="flex items-start gap-2">
+                    {onSelectPublication ? (
+                      <button
+                        type="button"
+                        onClick={() => onSelectPublication(publication)}
+                        className="text-left font-medium text-neutral-50 hover:text-accent-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-300 rounded-xs transition-colors cursor-pointer wrap-break-word"
+                      >
+                        {publication.title}
+                      </button>
+                    ) : (
+                      <span className="font-medium text-neutral-50 wrap-break-word">
+                        {publication.title}
+                      </span>
+                    )}
+                    {externalUrl && (
+                      <a
+                        href={externalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Visit ${publication.title} website`}
+                        className="mt-0.5 shrink-0 text-neutral-300 hover:text-accent-200 transition-colors"
+                      >
+                        <ExternalLink className="size-3.5" aria-hidden="true" />
+                      </a>
+                    )}
+                  </div>
                   <span className="text-xs text-neutral-300">
                     {[
                       publication.acronym,
                       PUBLISHER_LABELS[publication.publisher] ??
                         publication.publisher,
-                      publication.yearLunched ?? undefined,
+                      publication.launchYear ?? undefined,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
