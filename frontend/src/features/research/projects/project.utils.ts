@@ -1,6 +1,5 @@
 import type {
   GraduationProject,
-  ProjectFacets,
   ProjectFilters,
   ProjectSummary,
 } from "./project.type";
@@ -13,9 +12,9 @@ export function hasValue(value: string | null | undefined): value is string {
 
 export const EMPTY_FILTERS: ProjectFilters = {
   search: "",
-  university: "",
-  projectField: "",
-  year: "",
+  universities: [],
+  projectFields: [],
+  yearRange: null,
   sponsorship: "",
 };
 
@@ -52,11 +51,6 @@ export function projectYear(postedAt: string | null | undefined): string | undef
   return Number.isFinite(year) ? String(year) : undefined;
 }
 
-function safeLink(value: string | null | undefined): string | undefined {
-  if (!hasValue(value)) return undefined;
-  return /^https?:\/\//i.test(value.trim()) ? value.trim() : undefined;
-}
-
 export function toProjectSummary(project: GraduationProject): ProjectSummary {
   const sponsor =
     project.isSponsored && hasValue(project.sponsorCompany?.name)
@@ -72,31 +66,6 @@ export function toProjectSummary(project: GraduationProject): ProjectSummary {
     supervisor: hasValue(project.supervisor) ? project.supervisor.trim() : undefined,
     mentors: toNameList(project.coSupervisor),
     sponsor,
-    link: safeLink(project.documentationLink),
-  };
-}
-
-function sortedUnique(values: (string | undefined)[], compare?: (a: string, b: string) => number) {
-  const byKey = new Map<string, string>();
-  for (const value of values) {
-    if (!value) continue;
-    const key = value.toLowerCase();
-    if (!byKey.has(key)) byKey.set(key, value);
-  }
-  return [...byKey.values()].sort(compare ?? ((a, b) => a.localeCompare(b)));
-}
-
-/** Dropdown options from a sample of projects (the API has no facets endpoint). */
-export function buildFacets(projects: GraduationProject[]): ProjectFacets {
-  return {
-    universities: sortedUnique(
-      projects.map((project) => (hasValue(project.university) ? project.university.trim() : undefined)),
-    ),
-    fields: sortedUnique(projects.flatMap((project) => toFieldList(project.domains))),
-    years: sortedUnique(
-      projects.map((project) => projectYear(project.postedAt)),
-      (a, b) => Number(b) - Number(a),
-    ),
   };
 }
 

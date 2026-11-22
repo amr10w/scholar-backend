@@ -4,7 +4,6 @@ import {
   abbreviateUniversity,
   aggregateFields,
   avatarTone,
-  buildResearcherFacets,
   cleanName,
   filterAndSortPapers,
   formatCompact,
@@ -106,6 +105,23 @@ describe("toResearcherSummary", () => {
       tags: ["NLP", "Machine Learning", "Arabic Dialects"],
       scholarId: "123456",
       createdAt: "2026-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("ignores preview annotations when deriving initials and the university badge", () => {
+    const summary = toResearcherSummary(
+      makeResearcher({
+        firstName: "Mariam",
+        lastName: "Hassan (Demo)",
+        institutionName: "Nexus Cairo University (Demo)",
+      }),
+    );
+
+    expect(summary).toMatchObject({
+      name: "Mariam Hassan (Demo)",
+      initials: "MH",
+      university: "Nexus Cairo University (Demo)",
+      universityAbbr: "NCU",
     });
   });
 
@@ -260,15 +276,7 @@ describe("filterAndSortPapers", () => {
   });
 });
 
-describe("filter, facet and merge helpers", () => {
-  it("builds unique sorted facets and drops placeholders", () => {
-    expect(buildResearcherFacets(RESEARCHERS)).toEqual({
-      topics: ["NLP", "VLSI"],
-      departments: ["Marine Biology", "School of Sciences"],
-      universities: ["Alexandria University", "American University in Cairo"],
-    });
-  });
-
+describe("filter and merge helpers", () => {
   it("trims search when comparing filter keys and detects active filters", () => {
     expect(
       researcherFiltersKey({ ...EMPTY_RESEARCHER_FILTERS, search: "  Hassan  " }),
@@ -276,7 +284,7 @@ describe("filter, facet and merge helpers", () => {
     expect(hasActiveResearcherFilters(EMPTY_RESEARCHER_FILTERS)).toBe(false);
     expect(hasActiveResearcherFilters({ ...EMPTY_RESEARCHER_FILTERS, search: "   " })).toBe(false);
     expect(
-      hasActiveResearcherFilters({ ...EMPTY_RESEARCHER_FILTERS, mainTopic: "Robotics" }),
+      hasActiveResearcherFilters({ ...EMPTY_RESEARCHER_FILTERS, topics: ["Robotics"] }),
     ).toBe(true);
   });
 
