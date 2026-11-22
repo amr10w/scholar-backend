@@ -16,11 +16,65 @@ export interface AcademicResearcher {
   updatedAt: string;
 }
 
+/** Sortable fields supported by GET /api/researchers */
+export type ResearcherSortField =
+  | "id"
+  | "firstName"
+  | "lastName"
+  | "mainTopic"
+  | "institutionName"
+  | "department";
+
+export type SortOrder = "asc" | "desc";
+
 /** Query params supported by GET /api/researchers */
 export interface ResearcherQuery {
   page?: number;
   limit?: number;
+  sortBy?: ResearcherSortField;
+  sortOrder?: SortOrder;
+  researcher?: string;
+  mainTopic?: string;
+  institutionName?: string;
+  department?: string;
 }
+
+/** Controlled filter state for the Researchers toolbar */
+export interface ResearcherFilters {
+  search: string;
+  mainTopic: string;
+  department: string;
+  institutionName: string;
+}
+
+/** Distinct dropdown options sampled from GET /api/researchers */
+export interface ResearcherFacets {
+  topics: string[];
+  departments: string[];
+  universities: string[];
+}
+
+/** Payload for POST /api/researchers (auth required) */
+export interface CreateResearcherInput {
+  firstName: string;
+  lastName: string;
+  institutionName?: string | null;
+  mainTopic?: string | null;
+  department?: string | null;
+  scholarId?: string | null;
+}
+
+/** Partial payload for PATCH /api/researchers/:id (auth required) */
+export type UpdateResearcherInput = Partial<CreateResearcherInput>;
+
+/** Normalized error categories for UI branching */
+export type ResearcherErrorKind =
+  | "unauthorized"
+  | "not_found"
+  | "validation"
+  | "network"
+  | "server"
+  | "unknown";
 
 /* ---- Semantic Scholar payloads proxied by GET /api/search and POST /api/analyze ---- */
 
@@ -88,6 +142,9 @@ export interface ResearcherSummary {
   stats?: ResearcherStats;
   tags: string[];
   bookmarked?: boolean;
+  /** Retained in the view model, not rendered on cards */
+  scholarId?: string | null;
+  createdAt?: string;
 }
 
 export interface ResearchPaper {

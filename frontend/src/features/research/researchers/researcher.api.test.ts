@@ -1,41 +1,226 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import axios from "axios";
 
-const { get, post } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
-vi.mock("@/src/lib/api-client", () => ({ api: { get, post } }));
+const { get, post, patch, del } = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  patch: vi.fn(),
+  del: vi.fn(),
+}));
 
+vi.mock("@/src/lib/api-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/src/lib/api-client")>();
+  return {
+    ...actual,
+    api: { get, post, patch, delete: del },
+  };
+});
+
+import { ApiError } from "@/src/lib/api-client";
 import {
+  buildResearcherParams,
+  createResearcher,
+  deleteResearcher,
   fetchResearcher,
+  fetchResearcherFacets,
   fetchResearchers,
   fetchScholarProfile,
+  getResearcherErrorKind,
+  isNotFoundError,
+  isUnauthorizedError,
   resolveScholarAuthorId,
+  updateResearcher,
 } from "./researcher.api";
-import { COLLABORATORS, makeResearcher, makeScholarAuthor } from "./researcher.test-fixtures";
+import {
+  COLLABORATORS,
+  RESEARCHERS,
+  makeResearcher,
+  makeScholarAuthor,
+} from "./researcher.test-fixtures";
 
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
+  patch.mockReset();
+  del.mockReset();
+});
+
+describe("buildResearcherParams", () => {
+  it("omits empty and whitespace-only values and trims populated filters", () => {
+    expect(
+      buildResearcherParams({
+        page: 2,
+        limit: 12,
+        sortBy: "lastName",
+        sortOrder: "desc",
+        researcher: "  Hassan Ali  ",
+        mainTopic: "  ",
+        institutionName: "VLSI & Hardware",
+        department: "",
+      }),
+    ).toEqual({
+      page: 2,
+      limit: 12,
+      sortBy: "lastName",
+      sortOrder: "desc",
+      researcher: "Hassan Ali",
+      institutionName: "VLSI & Hardware",
+    });
+  });
 });
 
 describe("fetchResearchers", () => {
-  it("requests GET /researchers with page and limit", async () => {
-    const page = { success: true, data: [], pagination: { total: 0, page: 1, limit: 12, totalPages: 0 } };
+  it("requests GET /researchers with page, limit and filters", async () => {
+    const page = {
+      success: true,
+      data: [RESEARCHERS[0]],
+      pagination: { total: 45, page: 2, limit: 12, totalPages: 4 },
+    };
     get.mockResolvedValue({ data: page });
 
-    await expect(fetchResearchers({ page: 2 })).resolves.toBe(page);
+    const res = await fetchResearchers({
+      page: 2,
+      mainTopic: "VLSI & Hardware",
+      researcher: "  Hassan  ",
+    });
+
+    expect(res.data).toEqual([RESEARCHERS[0]]);
+    expect(res.pagination).toEqual({ total: 45, page: 2, limit: 12, totalPages: 4 });
     expect(get).toHaveBeenCalledWith("/researchers", {
-      params: { page: 2, limit: 12 },
+      params: {
+        page: 2,
+        limit: 12,
+        researcher: "Hassan",
+        mainTopic: "VLSI & Hardware",
+      },
       signal: undefined,
+    });
+  });
+
+  it("defensively normalizes missing or nullable fields", async () => {
+    get.mockResolvedValue({
+      data: {
+        success: true,
+        data: [{ id: 9, firstName: "Ali", lastName: "Nour" }],
+      },
+    });
+
+    const res = await fetchResearchers({ page: 1 });
+    expect(res.data[0]).toEqual({
+      id: 9,
+      firstName: "Ali",
+      lastName: "Nour",
+      institutionName: null,
+      department: null,
+      affiliation: null,
+      mainTopic: null,
+      subtopics: null,
+      scholarId: null,
+      linkedinUrl: null,
+      createdAt: "",
+      updatedAt: "",
+    });
+    expect(res.pagination).toEqual({ total: 1, page: 1, limit: 12, totalPages: 1 });
+  });
+
+  it("propagates aborted requests without wrapping them", async () => {
+    const cancelErr = new axios.CanceledError("aborted");
+    get.mockRejectedValue(cancelErr);
+    await expect(fetchResearchers({ page: 1 })).rejects.toBe(cancelErr);
+  });
+});
+
+describe("fetchResearcherFacets", () => {
+  it("samples up to 100 researchers and returns unique sorted facets", async () => {
+    get.mockResolvedValue({
+      data: {
+        success: true,
+        data: RESEARCHERS,
+        pagination: { total: 3, page: 1, limit: 100, totalPages: 1 },
+      },
+    });
+
+    const facets = await fetchResearcherFacets();
+    expect(get).toHaveBeenCalledWith("/researchers", {
+      params: { page: 1, limit: 100 },
+      signal: undefined,
+    });
+    expect(facets).toEqual({
+      topics: ["NLP", "VLSI"],
+      departments: ["Marine Biology", "School of Sciences"],
+      universities: ["Alexandria University", "American University in Cairo"],
     });
   });
 });
 
 describe("fetchResearcher", () => {
-  it("unwraps the { data } envelope of GET /researchers/:id", async () => {
+  it("unwraps the { data } envelope and URL-encodes the id", async () => {
     const researcher = makeResearcher({ id: 7 });
     get.mockResolvedValue({ data: { success: true, data: researcher } });
 
-    await expect(fetchResearcher(7)).resolves.toBe(researcher);
+    await expect(fetchResearcher("7")).resolves.toEqual(researcher);
     expect(get).toHaveBeenCalledWith("/researchers/7", { signal: undefined });
+  });
+});
+
+describe("write operations (POST / PATCH / DELETE)", () => {
+  it("creates a researcher via POST /researchers", async () => {
+    const created = makeResearcher({ id: 46, firstName: "Ziad", lastName: "Tarek" });
+    post.mockResolvedValue({ data: { success: true, data: created } });
+
+    await expect(
+      createResearcher({ firstName: "Ziad", lastName: "Tarek", mainTopic: "Robotics" }),
+    ).resolves.toEqual(created);
+    expect(post).toHaveBeenCalledWith(
+      "/researchers",
+      { firstName: "Ziad", lastName: "Tarek", mainTopic: "Robotics" },
+      { signal: undefined },
+    );
+  });
+
+  it("updates a researcher via PATCH /researchers/:id", async () => {
+    const updated = makeResearcher({ id: 7, mainTopic: "Photonics" });
+    patch.mockResolvedValue({ data: { success: true, data: updated } });
+
+    await expect(updateResearcher(7, { mainTopic: "Photonics" })).resolves.toEqual(updated);
+    expect(patch).toHaveBeenCalledWith(
+      "/researchers/7",
+      { mainTopic: "Photonics" },
+      { signal: undefined },
+    );
+  });
+
+  it("deletes a researcher via DELETE /researchers/:id without depending on response body", async () => {
+    del.mockResolvedValue({ data: undefined });
+    await expect(deleteResearcher(7)).resolves.toBeUndefined();
+    expect(del).toHaveBeenCalledWith("/researchers/7", { signal: undefined });
+  });
+
+  it("surfaces 401 unauthorized errors cleanly for write calls", async () => {
+    const unauth = new ApiError(401, "Access Denied. No session.");
+    post.mockRejectedValue(unauth);
+
+    try {
+      await createResearcher({ firstName: "A", lastName: "B" });
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect(isUnauthorizedError(err)).toBe(true);
+      expect(getResearcherErrorKind(err)).toBe("unauthorized");
+      expect((err as Error).message).toBe("Access Denied. No session.");
+    }
+  });
+});
+
+describe("error classification", () => {
+  it("distinguishes 401, 404, 400, network (0), 5xx, and unknown errors", () => {
+    expect(getResearcherErrorKind(new ApiError(401, "No session"))).toBe("unauthorized");
+    expect(isUnauthorizedError(new ApiError(401, "No session"))).toBe(true);
+    expect(getResearcherErrorKind(new ApiError(404, "Not found"))).toBe("not_found");
+    expect(isNotFoundError(new ApiError(404, "Not found"))).toBe(true);
+    expect(getResearcherErrorKind(new ApiError(400, "Bad input"))).toBe("validation");
+    expect(getResearcherErrorKind(new ApiError(0, "Network error"))).toBe("network");
+    expect(getResearcherErrorKind(new ApiError(500, "Server boom"))).toBe("server");
+    expect(getResearcherErrorKind(new Error("Other"))).toBe("unknown");
   });
 });
 
