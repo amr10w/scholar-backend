@@ -1,6 +1,65 @@
+import type { RequestHandler } from "express";
+import { Prisma } from "@prisma/client";
+import { catalogFacetValues, readFacetValues } from "../../utils/catalogFacets.js";
+import { yearCountsHandler } from "../../utils/yearCounts.js";
+import { parseYearBounds } from "../../utils/parseYearBounds.js";
+import asyncHandler from "../../lib/async.handler.js";
 
 import { db } from "../../db/db_config.js";
 
+
+// Decode both legacy text and arrays in the same way as the project cards.
+const projectFieldsQuery = Prisma.sql`
+    SELECT project.id, btrim(parts.value) AS field
+    FROM "graduationProjects" AS project
+    CROSS JOIN LATERAL jsonb_array_elements(
+        CASE jsonb_typeof(project.domains)
+            WHEN 'array' THEN project.domains
+            WHEN 'string' THEN jsonb_build_array(project.domains)
+            ELSE '[]'::jsonb
+        END
+    ) AS entry(item)
+    CROSS JOIN LATERAL jsonb_array_elements(
+        CASE jsonb_typeof(entry.item)
+            WHEN 'array' THEN entry.item
+            WHEN 'string' THEN jsonb_build_array(entry.item)
+            ELSE '[]'::jsonb
+        END
+    ) AS token(item)
+    CROSS JOIN LATERAL regexp_split_to_table(token.item #>> '{}', '[,;|]') AS parts(value)
+    WHERE jsonb_typeof(token.item) = 'string'
+`;
+
+export const getProjectFacets: RequestHandler = asyncHandler(async (_req, res) => {
+    const [universities, fields] = await Promise.all([
+        db.graduationProject.groupBy({ by: ["university"] }),
+        db.$queryRaw<{ field: string }[]>`
+            SELECT DISTINCT field FROM (${projectFieldsQuery}) AS fields
+        `,
+    ]);
+
+    res.json({ success: true, data: {
+        universities: catalogFacetValues(universities.map(row => row.university)),
+        fields: catalogFacetValues(fields.map(row => row.field)),
+    } });
+});
+
+export const getProjectYears = yearCountsHandler(async () => {
+    const rows = await db.$queryRaw<{ year: number; count: bigint }[]>`
+        SELECT EXTRACT(YEAR FROM "postedAt")::int AS year, count(*) AS count
+        FROM "graduationProjects"
+        WHERE "postedAt" >= TIMESTAMP '0001-01-01' AND "postedAt" < TIMESTAMP '10000-01-01'
+        GROUP BY year
+        ORDER BY year
+    `;
+    return rows.map(({ year, count }) => ({ year, count: Number(count) }));
+});
+
+function startOfYear(year: number) {
+    const start = new Date(0);
+    start.setUTCFullYear(year, 0, 1);
+    return start;
+}
 
 export const getProjectsController = async (req, res) => {
     try {
@@ -13,6 +72,8 @@ export const getProjectsController = async (req, res) => {
             university,
             projectField,
             year,
+            fromYear,
+            toYear,
             sponsorship,
         } = req.query;
 
@@ -36,6 +97,27 @@ export const getProjectsController = async (req, res) => {
             : "postedAt";
 
         const sortDirection = sortOrder === "asc" ? "asc" : "desc";
+
+        const yearBounds = parseYearBounds(fromYear, toYear);
+        if (yearBounds === null || (yearBounds && year)) {
+            return res.status(400).json({ success: false, message: "Invalid year range" });
+        }
+
+        const postedAt = yearBounds
+            ? {
+                gte: yearBounds.gte === undefined ? undefined : startOfYear(yearBounds.gte),
+                lt: yearBounds.lte === undefined ? undefined : startOfYear(yearBounds.lte + 1),
+            }
+            : undefined;
+
+        const universities = readFacetValues(req.query.universities);
+        const projectFields = readFacetValues(req.query.projectFields);
+        const matchingProjects = projectFields.length
+            ? await db.$queryRaw<{ id: number }[]>`
+                SELECT DISTINCT id FROM (${projectFieldsQuery}) AS fields
+                WHERE lower(field) IN (${Prisma.join(projectFields.map(field => field.toLowerCase()))})
+            `
+            : undefined;
 
         const where = {
             ...(search && {
@@ -61,19 +143,22 @@ export const getProjectsController = async (req, res) => {
                 ],
             }),
 
-            ...(university && {
+            ...(universities.length
+                ? { university: { in: universities, mode: "insensitive" as const } }
+                : university && {
                 university: {
                     contains: university,
                     mode: "insensitive" as const,
                 },
             }),
 
-            ...(projectField && {
+            ...(matchingProjects ? { id: { in: matchingProjects.map(project => project.id) } } : projectField && {
                 domains: {
                     array_contains: [projectField],
                 },
             }),
 
+            ...(postedAt && { postedAt }),
             ...(year && {
                 postedAt: {
                     gte: new Date(`${year}-01-01T00:00:00.000Z`),
@@ -129,7 +214,7 @@ export const getProjectsController = async (req, res) => {
 
 
 
-export const getProjectsByIdController = async (req, res) => {
+const getProjectById = (includeApplications: boolean) => async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
 
@@ -146,7 +231,7 @@ export const getProjectsByIdController = async (req, res) => {
             },
             include: {
                 sponsorCompany: true,
-                applications: true,
+                applications: includeApplications,
             },
         });
 
@@ -172,6 +257,9 @@ export const getProjectsByIdController = async (req, res) => {
 };
 
 
+
+export const getProjectsByIdController = getProjectById(true);
+export const getCatalogProjectController = getProjectById(false);
 
 export const createProjectController = async (req, res) => {
     try {

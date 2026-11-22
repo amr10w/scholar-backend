@@ -1,3 +1,5 @@
+import { parseYearBounds } from "../../utils/parseYearBounds.js";
+import { yearCountsHandler } from "../../utils/yearCounts.js";
 import { db } from "../../db/db_config.js";
 
 
@@ -7,11 +9,25 @@ const serializePaper = (paper) => ({
 });
 
 
+export const getPaperYears = yearCountsHandler(async () => {
+    const rows = await db.researchPaper.groupBy({
+        by: ["publicationYear"],
+        _count: { _all: true },
+        where: { publicationYear: { gt: 0, lte: 9999 } },
+        orderBy: { publicationYear: "asc" },
+    });
+    return rows.flatMap(row => row.publicationYear === null
+        ? []
+        : [{ year: row.publicationYear, count: row._count._all }]);
+});
+
 export const getPapersController = async (req, res) => {
     try {
         const {
             search = "",
             year,
+            fromYear,
+            toYear,
             page = 1,
             limit = 10,
             sortBy = "publicationYear",
@@ -28,6 +44,11 @@ export const getPapersController = async (req, res) => {
                 success: false,
                 message: "Invalid publication year",
             });
+        }
+
+        const yearBounds = parseYearBounds(fromYear, toYear);
+        if (yearBounds === null || (yearBounds && year)) {
+            return res.status(400).json({ success: false, message: "Invalid year range" });
         }
 
         const where = {
@@ -65,6 +86,7 @@ export const getPapersController = async (req, res) => {
                     },
                 ],
             }),
+            ...(yearBounds && { publicationYear: yearBounds }),
             ...(yearNum && { publicationYear: yearNum }),
         };
 
