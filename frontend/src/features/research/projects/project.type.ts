@@ -1,3 +1,5 @@
+import type { YearRange } from "../researchYears.api";
+
 export interface SponsorCompany {
   id: number;
   name: string;
@@ -29,14 +31,17 @@ export type Sponsorship = "" | "sponsored" | "unsponsored";
 /** Filter values as the toolbar holds them; "" means "any" */
 export interface ProjectFilters {
   search: string;
-  university: string;
-  projectField: string;
-  year: string;
+  universities: string[];
+  projectFields: string[];
+  yearRange: YearRange;
   sponsorship: Sponsorship;
 }
 
 /** Query params supported by GET /api/projects */
 export interface ProjectQuery extends Partial<ProjectFilters> {
+  university?: string;
+  projectField?: string;
+  year?: string;
   page?: number;
   limit?: number;
 }
@@ -45,7 +50,6 @@ export interface ProjectQuery extends Partial<ProjectFilters> {
 export interface ProjectFacets {
   universities: string[];
   fields: string[];
-  years: string[];
 }
 
 /** Everything a project card shows; optional rows are omitted when absent */
@@ -58,5 +62,4 @@ export interface ProjectSummary {
   supervisor?: string;
   mentors: string[];
   sponsor?: string;
-  link?: string;
 }

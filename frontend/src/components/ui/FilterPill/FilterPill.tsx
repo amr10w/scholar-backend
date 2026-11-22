@@ -17,6 +17,7 @@ const FilterPill = ({
   children,
 }: FilterPillProps) => {
   const [open, setOpen] = useState(false);
+  const [panelOffset, setPanelOffset] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const isActive = activeCount > 0;
@@ -28,7 +29,10 @@ const FilterPill = ({
       if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        containerRef.current?.querySelector("button")?.focus();
+      }
     };
 
     document.addEventListener("mousedown", handlePointerDown);
@@ -43,13 +47,22 @@ const FilterPill = ({
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          const bounds = containerRef.current?.getBoundingClientRect();
+          if (bounds) {
+            const panelWidth = Math.min(280, window.innerWidth - 64);
+            setPanelOffset(
+              Math.min(0, window.innerWidth - 16 - bounds.left - panelWidth),
+            );
+          }
+          setOpen((value) => !value);
+        }}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        className={`px-4 py-2 rounded-full border text-sm flex items-center gap-2 cursor-pointer ${
+        className={`px-4 py-2 rounded-full border text-sm flex items-center gap-2 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-200 ${
           isActive
             ? "border-accent-400 text-accent-200 bg-accent-400/10"
-            : "border-neutral-400 text-neutral-300"
+            : "border-neutral-400 text-neutral-100 hover:border-accent-400"
         }`}
       >
         {label}
@@ -64,7 +77,8 @@ const FilterPill = ({
       {open && (
         <div
           id={panelId}
-          className="absolute left-0 top-full mt-2 z-30 w-70 rounded-2xl border border-neutral-400 bg-neutral-800 p-4"
+          style={{ left: panelOffset }}
+          className="absolute top-full mt-2 z-30 w-70 max-w-[calc(100vw-4rem)] rounded-2xl border border-neutral-400 bg-neutral-800 p-4"
         >
           <div className="flex items-center justify-between gap-2 mb-3">
             <span className="text-sm font-semibold text-neutral-50">

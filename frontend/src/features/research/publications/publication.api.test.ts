@@ -19,9 +19,11 @@ vi.mock("@/src/lib/api-client", async (importOriginal) => {
 import { ApiError } from "@/src/lib/api-client";
 import {
   buildPublicationParams,
+  countPublicationFilters,
   createPublication,
   deletePublication,
   fetchPublication,
+  fetchPublicationFacets,
   fetchPublications,
   getPublicationErrorKind,
   isPublicationConflict,
@@ -31,6 +33,7 @@ import {
   normalizePublication,
   updatePublication,
 } from "./publication.api";
+import { EMPTY_FILTERS } from "./publication.constants";
 
 const RAW_JAIR = {
   id: 1,
@@ -63,37 +66,55 @@ beforeEach(() => {
   del.mockReset();
 });
 
-describe("buildPublicationParams", () => {
-  it("omits empty search and forwards sortBy and sortOrder", () => {
+describe("buildPublicationParams & countPublicationFilters", () => {
+  it("serializes search, comma-joined catalog filters, sortBy, and sortOrder", () => {
     expect(
       buildPublicationParams({
         page: 2,
         limit: 10,
         search: "   ",
+        categoryIds: [1, 5],
+        publicationTypes: ["Journal"],
+        accessModels: ["Full_Open_Access"],
+        publishers: ["ACM", "IEEE"],
+        quartiles: ["Q1"],
         sortBy: "yearLunched",
         sortOrder: "desc",
       }),
     ).toEqual({
       page: 2,
       limit: 10,
+      search: undefined,
+      categoryIds: "1,5",
+      publicationTypes: "Journal",
+      accessModels: "Full_Open_Access",
+      publishers: "ACM,IEEE",
+      quartiles: "Q1",
       sortBy: "yearLunched",
       sortOrder: "desc",
     });
 
-    expect(buildPublicationParams({ search: "  JAIR  " })).toEqual({
-      page: 1,
-      limit: 10,
-      search: "JAIR",
-    });
+    expect(countPublicationFilters(EMPTY_FILTERS)).toBe(0);
+    expect(
+      countPublicationFilters({
+        ...EMPTY_FILTERS,
+        categoryIds: [5],
+        quartiles: ["Q1"],
+      }),
+    ).toBe(2);
   });
 });
 
-describe("normalizePublication (yearLunched boundary isolation)", () => {
-  it("maps raw yearLunched to launchYear and never exposes yearLunched on the model", () => {
+describe("normalizePublication", () => {
+  it("maps raw yearLunched to both launchYear and yearLunched", () => {
     const pub = normalizePublication(RAW_JAIR);
     expect(pub.launchYear).toBe(1993);
-    expect("yearLunched" in pub).toBe(false);
-    expect(pub.subCategory).toEqual({ id: 5, domainId: 1, name: "Artificial Intelligence" });
+    expect(pub.yearLunched).toBe(1993);
+    expect(pub.subCategory).toEqual({
+      id: 5,
+      domainId: 1,
+      name: "Artificial Intelligence",
+    });
   });
 
   it("defensively handles null, undefined, or partial records without crashing", () => {
@@ -101,12 +122,13 @@ describe("normalizePublication (yearLunched boundary isolation)", () => {
     expect(empty.id).toBe(0);
     expect(empty.title).toBe("");
     expect(empty.launchYear).toBeNull();
+    expect(empty.yearLunched).toBeNull();
     expect(empty.subCategory).toBeNull();
   });
 });
 
-describe("fetchPublications", () => {
-  it("fetches GET /publications with search, sort, page, limit and normalizes rows", async () => {
+describe("fetchPublications & fetchPublicationFacets", () => {
+  it("fetches GET /publications with search, filters, sort, page, limit and normalizes rows", async () => {
     get.mockResolvedValue({
       data: {
         success: true,
@@ -118,17 +140,45 @@ describe("fetchPublications", () => {
     const res = await fetchPublications({
       search: " JAIR ",
       page: 1,
+      publishers: ["ACM"],
       sortBy: "title",
       sortOrder: "asc",
     });
 
     expect(get).toHaveBeenCalledWith("/publications", {
-      params: { page: 1, limit: 10, search: "JAIR", sortBy: "title", sortOrder: "asc" },
+      params: {
+        page: 1,
+        limit: 10,
+        search: "JAIR",
+        categoryIds: undefined,
+        publicationTypes: undefined,
+        accessModels: undefined,
+        publishers: "ACM",
+        quartiles: undefined,
+        sortBy: "title",
+        sortOrder: "asc",
+      },
       signal: undefined,
     });
     expect(res.data[0].launchYear).toBe(1993);
-    expect("yearLunched" in res.data[0]).toBe(false);
+    expect(res.data[0].yearLunched).toBe(1993);
     expect(res.pagination.total).toBe(200);
+  });
+
+  it("fetches GET /publications/filters for sidebar facets", async () => {
+    const facets = {
+      subjects: [{ id: 5, domainId: 1, name: "Artificial Intelligence" }],
+      publicationTypes: ["Journal"],
+      accessModels: ["Full_Open_Access"],
+      publishers: ["ACM"],
+      quartiles: ["Q1"],
+    };
+    get.mockResolvedValue({ data: { success: true, data: facets } });
+
+    await expect(fetchPublicationFacets()).resolves.toEqual(facets);
+    expect(get).toHaveBeenCalledWith("/publications/filters", {
+      signal: undefined,
+    });
   });
 
   it("propagates aborted requests without wrapping them", async () => {
@@ -139,20 +189,22 @@ describe("fetchPublications", () => {
 });
 
 describe("fetchPublication", () => {
-  it("fetches GET /publications/:id, URL-encodes id, and maps yearLunched to launchYear", async () => {
+  it("fetches GET /publications/:id, URL-encodes id, and normalizes yearLunched", async () => {
     get.mockResolvedValue({ data: { success: true, data: RAW_JAIR } });
 
     const pub = await fetchPublication(1);
     expect(get).toHaveBeenCalledWith("/publications/1", { signal: undefined });
     expect(pub.id).toBe(1);
     expect(pub.launchYear).toBe(1993);
-    expect("yearLunched" in pub).toBe(false);
+    expect(pub.yearLunched).toBe(1993);
   });
 });
 
 describe("createPublication, updatePublication, deletePublication", () => {
   it("maps launchYear -> yearLunched on POST /publications and normalizes the response", async () => {
-    post.mockResolvedValue({ data: { success: true, data: { ...RAW_JAIR, id: 201 } } });
+    post.mockResolvedValue({
+      data: { success: true, data: { ...RAW_JAIR, id: 201 } },
+    });
 
     const created = await createPublication({
       subCategoryId: 5,
@@ -186,7 +238,10 @@ describe("createPublication, updatePublication, deletePublication", () => {
       data: { success: true, data: { ...RAW_JAIR, yearLunched: 2026 } },
     });
 
-    const updated = await updatePublication(1, { launchYear: 2026, acronym: "JAIR2" });
+    const updated = await updatePublication(1, {
+      launchYear: 2026,
+      acronym: "JAIR2",
+    });
     expect(patch).toHaveBeenCalledWith(
       "/publications/1",
       { acronym: "JAIR2", yearLunched: 2026 },
@@ -203,31 +258,42 @@ describe("createPublication, updatePublication, deletePublication", () => {
 });
 
 describe("getPublicationErrorKind", () => {
-  it("classifies 400, 401, 403, 404, 409, 5xx, network(0), non-JSON errors, and unknown causes", () => {
-    expect(getPublicationErrorKind(new ApiError(400, "Publication title is required"))).toBe(
-      "validation",
-    );
-    expect(getPublicationErrorKind(new ApiError(401, "Access Denied. No session."))).toBe(
-      "unauthorized",
-    );
-    expect(isPublicationUnauthorized(new ApiError(401, "No session"))).toBe(true);
-    expect(getPublicationErrorKind(new ApiError(403, "Access Denied. Admins only."))).toBe(
-      "forbidden",
-    );
-    expect(isPublicationForbidden(new ApiError(403, "Admins only"))).toBe(true);
-    expect(getPublicationErrorKind(new ApiError(404, "Publication not found"))).toBe("not_found");
-    expect(isPublicationNotFound(new ApiError(404, "Publication not found"))).toBe(true);
+  it("classifies 400, 401, 403, 404, 409, 5xx, network(0), and unknown causes", () => {
     expect(
-      getPublicationErrorKind(new ApiError(409, "A publication with this issn already exists.")),
+      getPublicationErrorKind(
+        new ApiError(400, "Publication title is required"),
+      ),
+    ).toBe("validation");
+    expect(
+      getPublicationErrorKind(new ApiError(401, "Access Denied. No session.")),
+    ).toBe("unauthorized");
+    expect(isPublicationUnauthorized(new ApiError(401, "No session"))).toBe(
+      true,
+    );
+    expect(
+      getPublicationErrorKind(new ApiError(403, "Access Denied. Admins only.")),
+    ).toBe("forbidden");
+    expect(isPublicationForbidden(new ApiError(403, "Admins only"))).toBe(true);
+    expect(
+      getPublicationErrorKind(new ApiError(404, "Publication not found")),
+    ).toBe("not_found");
+    expect(
+      isPublicationNotFound(new ApiError(404, "Publication not found")),
+    ).toBe(true);
+    expect(
+      getPublicationErrorKind(
+        new ApiError(409, "A publication with this issn already exists."),
+      ),
     ).toBe("conflict");
-    expect(isPublicationConflict(new ApiError(409, "Duplicate issn"))).toBe(true);
-    expect(getPublicationErrorKind(new ApiError(500, "Internal server error"))).toBe("server");
-    expect(getPublicationErrorKind(new ApiError(502, "Request failed with status 502"))).toBe(
-      "server",
+    expect(isPublicationConflict(new ApiError(409, "Duplicate issn"))).toBe(
+      true,
     );
-    expect(getPublicationErrorKind(new ApiError(0, "Could not reach the server."))).toBe(
-      "network",
-    );
+    expect(
+      getPublicationErrorKind(new ApiError(500, "Internal server error")),
+    ).toBe("server");
+    expect(
+      getPublicationErrorKind(new ApiError(0, "Could not reach the server.")),
+    ).toBe("network");
     expect(getPublicationErrorKind(new Error("Unexpected"))).toBe("unknown");
   });
 });

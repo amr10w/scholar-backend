@@ -1,4 +1,25 @@
+import type { RequestHandler } from "express";
+import asyncHandler from "../../lib/async.handler.js";
+import { catalogFacetValues, readFacetValues } from "../../utils/catalogFacets.js";
 import { db } from "../../db/db_config.js";
+
+export const getJobFacets: RequestHandler = asyncHandler(async (_req, res) => {
+    const [countries, disciplines, companies] = await Promise.all([
+        db.companyBranch.groupBy({ by: ["country"], where: { jobs: { some: {} } } }),
+        db.job.groupBy({ by: ["industry"] }),
+        db.company.findMany({
+            where: { jobs: { some: {} } },
+            select: { id: true, name: true },
+            orderBy: [{ name: "asc" }, { id: "asc" }],
+        }),
+    ]);
+
+    res.json({ success: true, data: {
+        countries: catalogFacetValues(countries.map(row => row.country)),
+        disciplines: catalogFacetValues(disciplines.map(row => row.industry)),
+        companies,
+    } });
+});
 
 export const getJobsController = async (req, res) => {
     try {
@@ -28,7 +49,6 @@ export const getJobsController = async (req, res) => {
             "type",
             "seniority",
             "postedAt",
-            "createdAt",
         ];
 
         const sortField = allowedSortFields.includes(sortBy as string)
@@ -36,6 +56,12 @@ export const getJobsController = async (req, res) => {
             : "postedAt";
 
         const sortDirection = sortOrder === "asc" ? "asc" : "desc";
+
+        const countries = readFacetValues(req.query.countries);
+        const disciplines = readFacetValues(req.query.disciplines);
+        const companyIds = readFacetValues(req.query.companyIds)
+            .filter(value => /^[1-9]\d*$/.test(value) && Number(value) <= 2_147_483_647)
+            .map(Number);
 
         const where: any = {
             ...(search && {
@@ -61,7 +87,7 @@ export const getJobsController = async (req, res) => {
                 ],
             }),
 
-            ...(discipline && {
+            ...(disciplines.length ? { industry: { in: disciplines, mode: "insensitive" } } : discipline && {
                 industry: {
                     contains: discipline as string,
                     mode: "insensitive" as const,
@@ -76,23 +102,30 @@ export const getJobsController = async (req, res) => {
                 seniority: seniority as any,
             }),
 
+            ...(companyIds.length && { companyId: { in: companyIds } }),
+
             ...(company && {
-                OR: [
-                    ...(isNaN(parseInt(company as string, 10))
-                        ? []
-                        : [{ companyId: parseInt(company as string, 10) }]),
+                // Keep company matching separate from the keyword search OR.
+                AND: [
                     {
-                        company: {
-                            name: {
-                                contains: company as string,
-                                mode: "insensitive" as const,
+                        OR: [
+                            ...(isNaN(parseInt(company as string, 10))
+                                ? []
+                                : [{ companyId: parseInt(company as string, 10) }]),
+                            {
+                                company: {
+                                    name: {
+                                        contains: company as string,
+                                        mode: "insensitive" as const,
+                                    },
+                                },
                             },
-                        },
+                        ],
                     },
                 ],
             }),
 
-            ...(country && {
+            ...(countries.length ? { branch: { country: { in: countries, mode: "insensitive" } } } : country && {
                 branch: {
                     country: {
                         contains: country as string,

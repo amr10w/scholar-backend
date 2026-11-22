@@ -76,12 +76,6 @@ export interface PublicationSubCategory {
   domain?: { id: number; name: string };
 }
 
-export interface PublicationDomain {
-  id: number;
-  name: string;
-  subCategories: PublicationSubCategory[];
-}
-
 export interface PublicationYearlyMetric {
   id: number;
   publicationId: number;
@@ -119,11 +113,6 @@ export interface PublicationEditorialStat {
   acceptanceRate: DecimalString | null;
 }
 
-/**
- * Normalized frontend publication model.
- * Note: The backend's misspelled `yearLunched` field is mapped at the API boundary
- * in `publication.api.ts` to `launchYear` so no UI component depends on the typo.
- */
 export interface Publication {
   id: number;
   subCategoryId: number;
@@ -135,25 +124,37 @@ export interface Publication {
   eissn: string | null;
   issnCdrom: string | null;
   URL: string | null;
-  launchYear: number | null;
+  yearLunched: number | null;
+  launchYear?: number | null;
   openAccessType: PublicationAccessType;
   specificFocusScope: string | null;
   workflow: Workflow;
   licenseType: LicenseType | null;
   journalScope: string | null;
   imprint: string | null;
-  subBucket: SubBucket | null;
-  createdAt: string;
-  updatedAt: string;
+  subBucket: SubBucket | string | null;
+  createdAt?: string;
+  updatedAt?: string;
   subCategory: PublicationSubCategory | null;
-  // Not returned by GET /api/publications yet (it only includes subCategory)
   yearlyMetrics?: PublicationYearlyMetric[];
   pricings?: PublicationPricing[];
   editorialStats?: PublicationEditorialStat[];
 }
 
+export interface PublicationFilters {
+  categoryIds: number[];
+  publicationTypes: PublicationType[];
+  accessModels: PublicationAccessType[];
+  publishers: Publisher[];
+  quartiles: Quartile[];
+}
+
+export interface PublicationFacets extends Omit<PublicationFilters, "categoryIds"> {
+  subjects: PublicationSubCategory[];
+}
+
 /** Query params supported by GET /api/publications */
-export interface PublicationQuery {
+export interface PublicationQuery extends Partial<PublicationFilters> {
   search?: string;
   page?: number;
   limit?: number;
@@ -175,6 +176,7 @@ export interface CreatePublicationInput {
   issnCdrom?: string | null;
   URL?: string | null;
   launchYear?: number | null;
+  yearLunched?: number | null;
   specificFocusScope?: string | null;
   licenseType?: LicenseType | null;
   journalScope?: string | null;
@@ -184,36 +186,3 @@ export interface CreatePublicationInput {
 
 /** Partial payload for PATCH /api/publications/:id (auth required) */
 export type UpdatePublicationInput = Partial<CreatePublicationInput>;
-
-export interface NumericRange {
-  min: number;
-  max: number;
-}
-
-export interface PublicationFilterRanges {
-  impactFactor: NumericRange;
-  sjr: NumericRange;
-  citeScore: NumericRange;
-  firstDecisionWeeks: NumericRange;
-  submissionToAcceptanceWeeks: NumericRange;
-}
-
-export interface RangeValue {
-  min?: number;
-  max?: number;
-}
-
-export interface PublicationFilterState {
-  search: string;
-  categoryIds: number[];
-  publishingModel: PublicationAccessType[];
-  licensing: LicenseType[];
-  quartiles: Quartile[];
-  impactFactor: RangeValue;
-  sjr: RangeValue;
-  citeScore: RangeValue;
-  currency: string;
-  maxCost?: number;
-  firstDecisionWeeks: RangeValue;
-  submissionToAcceptanceWeeks: RangeValue;
-}

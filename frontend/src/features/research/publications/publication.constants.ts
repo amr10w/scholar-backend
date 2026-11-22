@@ -1,10 +1,9 @@
 import type {
   LicenseType,
   PublicationAccessType,
-  PublicationFilterState,
+  PublicationFilters,
   PublicationSortField,
   Publisher,
-  Quartile,
   SubBucket,
   Workflow,
 } from "./publication.type";
@@ -59,7 +58,10 @@ export const SUB_BUCKET_LABELS: Record<SubBucket, string> = {
   TheLancetGold: "The Lancet Gold",
 };
 
-export const PUBLICATION_SORT_OPTIONS: { value: PublicationSortField; label: string }[] = [
+export const PUBLICATION_SORT_OPTIONS: {
+  value: PublicationSortField;
+  label: string;
+}[] = [
   { value: "id", label: "Default (ID)" },
   { value: "title", label: "Title" },
   { value: "acronym", label: "Acronym" },
@@ -68,27 +70,10 @@ export const PUBLICATION_SORT_OPTIONS: { value: PublicationSortField; label: str
   { value: "updatedAt", label: "Last updated" },
 ];
 
-export const ACCESS_TYPE_OPTIONS = Object.keys(
-  ACCESS_TYPE_LABELS,
-) as PublicationAccessType[];
-
-export const LICENSE_OPTIONS = Object.keys(LICENSE_LABELS) as LicenseType[];
-
-export const QUARTILE_OPTIONS: Quartile[] = ["Q1", "Q2", "Q3", "Q4"];
-
-export const CURRENCY_OPTIONS = ["USD", "EUR", "GBP"];
-
-export const EMPTY_FILTERS: PublicationFilterState = {
-  search: "",
+export const EMPTY_FILTERS: PublicationFilters = {
   categoryIds: [],
-  publishingModel: [],
-  licensing: [],
+  publicationTypes: [],
+  accessModels: [],
+  publishers: [],
   quartiles: [],
-  impactFactor: {},
-  sjr: {},
-  citeScore: {},
-  currency: "USD",
-  maxCost: undefined,
-  firstDecisionWeeks: {},
-  submissionToAcceptanceWeeks: {},
 };

@@ -2,20 +2,18 @@ import { ApiError, api, type ApiResponse, type Paginated } from "@/src/lib/api-c
 import type {
   CreatePublicationInput,
   LicenseType,
-  NumericRange,
   Publication,
   PublicationAccessType,
   PublicationEditorialStat,
   PublicationErrorKind,
-  PublicationFilterRanges,
-  PublicationFilterState,
+  PublicationFacets,
+  PublicationFilters,
   PublicationPricing,
   PublicationQuery,
   PublicationSubCategory,
   PublicationType,
   PublicationYearlyMetric,
   Publisher,
-  RangeValue,
   SubBucket,
   UpdatePublicationInput,
   Workflow,
@@ -23,7 +21,8 @@ import type {
 
 /**
  * Raw API row returned by `/api/publications` and `/api/publications/:id`.
- * The backend misspells `launchYear` as `yearLunched`; kept strictly inside this boundary.
+ * The backend misspells `launchYear` as `yearLunched`; normalized here so both
+ * `launchYear` and `yearLunched` are available on `Publication`.
  */
 interface ApiPublicationRow {
   id?: number;
@@ -44,13 +43,17 @@ interface ApiPublicationRow {
   licenseType?: LicenseType | null;
   journalScope?: string | null;
   imprint?: string | null;
-  subBucket?: SubBucket | null;
+  subBucket?: SubBucket | string | null;
   createdAt?: string;
   updatedAt?: string;
   subCategory?: PublicationSubCategory | null;
   yearlyMetrics?: PublicationYearlyMetric[];
   pricings?: PublicationPricing[];
   editorialStats?: PublicationEditorialStat[];
+}
+
+export function countPublicationFilters(filters: PublicationFilters) {
+  return Object.values(filters).filter((values) => values.length > 0).length;
 }
 
 export function getPublicationErrorKind(cause: unknown): PublicationErrorKind {
@@ -82,7 +85,9 @@ export function isPublicationConflict(cause: unknown): boolean {
   return getPublicationErrorKind(cause) === "conflict";
 }
 
-export function normalizePublication(raw: ApiPublicationRow | null | undefined): Publication {
+export function normalizePublication(
+  raw: ApiPublicationRow | null | undefined,
+): Publication {
   const rawYear = raw?.yearLunched ?? raw?.launchYear;
   const launchYear =
     typeof rawYear === "number" && Number.isFinite(rawYear) ? rawYear : null;
@@ -93,7 +98,9 @@ export function normalizePublication(raw: ApiPublicationRow | null | undefined):
       ? {
           id: typeof subCat.id === "number" ? subCat.id : Number(subCat.id) || 0,
           domainId:
-            typeof subCat.domainId === "number" ? subCat.domainId : Number(subCat.domainId) || 0,
+            typeof subCat.domainId === "number"
+              ? subCat.domainId
+              : Number(subCat.domainId) || 0,
           name: subCat.name,
           ...(subCat.domain ? { domain: subCat.domain } : {}),
         }
@@ -102,43 +109,63 @@ export function normalizePublication(raw: ApiPublicationRow | null | undefined):
   return {
     id: typeof raw?.id === "number" ? raw.id : Number(raw?.id) || 0,
     subCategoryId:
-      typeof raw?.subCategoryId === "number" ? raw.subCategoryId : Number(raw?.subCategoryId) || 0,
+      typeof raw?.subCategoryId === "number"
+        ? raw.subCategoryId
+        : Number(raw?.subCategoryId) || 0,
     acronym: typeof raw?.acronym === "string" ? raw.acronym : null,
-    publisher: (typeof raw?.publisher === "string" ? raw.publisher : "IEEE") as Publisher,
-    publicationType: (
-      typeof raw?.publicationType === "string" ? raw.publicationType : "Journal"
-    ) as PublicationType,
+    publisher: (typeof raw?.publisher === "string"
+      ? raw.publisher
+      : "IEEE") as Publisher,
+    publicationType: (typeof raw?.publicationType === "string"
+      ? raw.publicationType
+      : "Journal") as PublicationType,
     title: typeof raw?.title === "string" ? raw.title : "",
     issn: typeof raw?.issn === "string" ? raw.issn : null,
     eissn: typeof raw?.eissn === "string" ? raw.eissn : null,
     issnCdrom: typeof raw?.issnCdrom === "string" ? raw.issnCdrom : null,
     URL: typeof raw?.URL === "string" ? raw.URL : null,
+    yearLunched: launchYear,
     launchYear,
-    openAccessType: (
-      typeof raw?.openAccessType === "string" ? raw.openAccessType : "Hybrid"
-    ) as PublicationAccessType,
+    openAccessType: (typeof raw?.openAccessType === "string"
+      ? raw.openAccessType
+      : "Hybrid") as PublicationAccessType,
     specificFocusScope:
-      typeof raw?.specificFocusScope === "string" ? raw.specificFocusScope : null,
-    workflow: (typeof raw?.workflow === "string" ? raw.workflow : "standard") as Workflow,
-    licenseType: (typeof raw?.licenseType === "string" ? raw.licenseType : null) as LicenseType | null,
-    journalScope: typeof raw?.journalScope === "string" ? raw.journalScope : null,
+      typeof raw?.specificFocusScope === "string"
+        ? raw.specificFocusScope
+        : null,
+    workflow: (typeof raw?.workflow === "string"
+      ? raw.workflow
+      : "standard") as Workflow,
+    licenseType: (typeof raw?.licenseType === "string"
+      ? raw.licenseType
+      : null) as LicenseType | null,
+    journalScope:
+      typeof raw?.journalScope === "string" ? raw.journalScope : null,
     imprint: typeof raw?.imprint === "string" ? raw.imprint : null,
-    subBucket: (typeof raw?.subBucket === "string" ? raw.subBucket : null) as SubBucket | null,
+    subBucket: (typeof raw?.subBucket === "string"
+      ? raw.subBucket
+      : null) as SubBucket | string | null,
     createdAt: typeof raw?.createdAt === "string" ? raw.createdAt : "",
     updatedAt: typeof raw?.updatedAt === "string" ? raw.updatedAt : "",
     subCategory,
-    ...(Array.isArray(raw?.yearlyMetrics) ? { yearlyMetrics: raw.yearlyMetrics } : {}),
+    ...(Array.isArray(raw?.yearlyMetrics)
+      ? { yearlyMetrics: raw.yearlyMetrics }
+      : {}),
     ...(Array.isArray(raw?.pricings) ? { pricings: raw.pricings } : {}),
-    ...(Array.isArray(raw?.editorialStats) ? { editorialStats: raw.editorialStats } : {}),
+    ...(Array.isArray(raw?.editorialStats)
+      ? { editorialStats: raw.editorialStats }
+      : {}),
   };
 }
 
 function toApiWritePayload(
   input: CreatePublicationInput | UpdatePublicationInput,
 ): Record<string, unknown> {
-  const { launchYear, ...rest } = input;
+  const { launchYear, yearLunched, ...rest } = input;
   const payload: Record<string, unknown> = { ...rest };
-  if (launchYear !== undefined) {
+  if (yearLunched !== undefined) {
+    payload.yearLunched = yearLunched;
+  } else if (launchYear !== undefined) {
     payload.yearLunched = launchYear;
   }
   return payload;
@@ -152,10 +179,22 @@ export function buildPublicationParams({
   limit = PUBLICATIONS_PAGE_SIZE,
   sortBy,
   sortOrder,
-}: PublicationQuery = {}): Record<string, string | number> {
-  const params: Record<string, string | number> = { page, limit };
-  const trimmedSearch = search?.trim();
-  if (trimmedSearch) params.search = trimmedSearch;
+  categoryIds,
+  publicationTypes,
+  accessModels,
+  publishers,
+  quartiles,
+}: PublicationQuery = {}): Record<string, string | number | undefined> {
+  const params: Record<string, string | number | undefined> = {
+    search: search?.trim() || undefined,
+    page,
+    limit,
+    categoryIds: categoryIds?.join(",") || undefined,
+    publicationTypes: publicationTypes?.join(",") || undefined,
+    accessModels: accessModels?.join(",") || undefined,
+    publishers: publishers?.join(",") || undefined,
+    quartiles: quartiles?.join(",") || undefined,
+  };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;
   return params;
@@ -171,7 +210,9 @@ export async function fetchPublications(
     signal,
   });
 
-  const rows = Array.isArray(data?.data) ? data.data.map(normalizePublication) : [];
+  const rows = Array.isArray(data?.data)
+    ? data.data.map(normalizePublication)
+    : [];
   const limit = data?.pagination?.limit ?? Number(params.limit);
   const total = data?.pagination?.total ?? rows.length;
   const page = data?.pagination?.page ?? Number(params.page);
@@ -184,6 +225,16 @@ export async function fetchPublications(
     data: rows,
     pagination: { total, page, limit, totalPages },
   };
+}
+
+export async function fetchPublicationFacets(
+  signal?: AbortSignal,
+): Promise<PublicationFacets> {
+  const { data } = await api.get<ApiResponse<PublicationFacets>>(
+    "/publications/filters",
+    { signal },
+  );
+  return data.data;
 }
 
 export async function fetchPublication(
@@ -230,93 +281,4 @@ export async function deletePublication(
 ): Promise<void> {
   const encodedId = encodeURIComponent(String(id));
   await api.delete(`/publications/${encodedId}`, { signal });
-}
-
-/* ---- Legacy filter range helpers kept for PublicationFilterBar ---- */
-
-export function isRangeActive(
-  value: RangeValue,
-  bound?: NumericRange,
-): boolean {
-  if (value.min === undefined && value.max === undefined) return false;
-  if (!bound) return true;
-
-  const narrowsMin = value.min !== undefined && value.min > bound.min;
-  const narrowsMax = value.max !== undefined && value.max < bound.max;
-  return narrowsMin || narrowsMax;
-}
-
-function activeRange(
-  value: RangeValue,
-  bound?: NumericRange,
-): RangeValue | undefined {
-  return isRangeActive(value, bound) ? value : undefined;
-}
-
-function appendRange(
-  params: URLSearchParams,
-  prefix: string,
-  value: RangeValue | undefined,
-): void {
-  if (!value) return;
-  if (value.min !== undefined) params.set(`${prefix}Min`, String(value.min));
-  if (value.max !== undefined) params.set(`${prefix}Max`, String(value.max));
-}
-
-export function buildSearchParams(
-  filters: PublicationFilterState,
-  ranges?: PublicationFilterRanges,
-): URLSearchParams {
-  const params = new URLSearchParams();
-
-  const query = filters.search.trim();
-  if (query) params.set("q", query);
-
-  if (filters.categoryIds.length) {
-    params.set("categoryIds", filters.categoryIds.join(","));
-  }
-
-  if (filters.publishingModel.length) {
-    params.set("publishingModel", filters.publishingModel.join(","));
-  }
-
-  if (filters.licensing.length) {
-    params.set("licensing", filters.licensing.join(","));
-  }
-
-  if (filters.quartiles.length) {
-    params.set("quartiles", filters.quartiles.join(","));
-  }
-
-  if (filters.maxCost !== undefined) {
-    params.set("currency", filters.currency);
-    params.set("maxCost", String(filters.maxCost));
-  }
-
-  appendRange(
-    params,
-    "impactFactor",
-    activeRange(filters.impactFactor, ranges?.impactFactor),
-  );
-  appendRange(params, "sjr", activeRange(filters.sjr, ranges?.sjr));
-  appendRange(
-    params,
-    "citeScore",
-    activeRange(filters.citeScore, ranges?.citeScore),
-  );
-  appendRange(
-    params,
-    "firstDecisionWeeks",
-    activeRange(filters.firstDecisionWeeks, ranges?.firstDecisionWeeks),
-  );
-  appendRange(
-    params,
-    "submissionToAcceptanceWeeks",
-    activeRange(
-      filters.submissionToAcceptanceWeeks,
-      ranges?.submissionToAcceptanceWeeks,
-    ),
-  );
-
-  return params;
 }
