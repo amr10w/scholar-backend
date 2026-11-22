@@ -64,7 +64,7 @@ const Card = ({
         className={`min-w-0 w-full flex flex-col ${compact ? "gap-1.5" : "gap-2.5"}`}
       >
         {eyebrow && (
-          <p className="line-clamp-2 text-sm leading-5 text-neutral-200">
+          <p className="line-clamp-2 wrap-break-word text-sm leading-5 text-neutral-200">
             {eyebrow}
           </p>
         )}
