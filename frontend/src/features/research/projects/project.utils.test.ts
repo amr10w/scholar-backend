@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_FILTERS,
-  buildFacets,
   filtersKey,
   hasActiveFilters,
   projectYear,
@@ -56,7 +55,6 @@ describe("toProjectSummary", () => {
       supervisor: "Dr. Abd El Rahman Abo Taleb",
       mentors: ["Eng. Nour El Deen El Hout", "Eng. Sara Nassef"],
       sponsor: "Siemens EDA",
-      link: "https://example.com/fpga-riscv",
     });
   });
 
@@ -73,7 +71,6 @@ describe("toProjectSummary", () => {
     );
     expect(summary).toMatchObject({ university: undefined, fields: [], supervisor: undefined, mentors: [] });
     expect(summary.sponsor).toBeUndefined();
-    expect(summary.link).toBeUndefined();
   });
 
   it("only shows a sponsor for sponsored projects with a named company", () => {
@@ -81,26 +78,6 @@ describe("toProjectSummary", () => {
     expect(toProjectSummary(makeProject({ isSponsored: false })).sponsor).toBeUndefined();
   });
 
-  it("drops documentation links that aren't http(s)", () => {
-    expect(toProjectSummary(makeProject({ documentationLink: "javascript:alert(1)" })).link).toBeUndefined();
-    expect(toProjectSummary(makeProject({ documentationLink: "drive/folder" })).link).toBeUndefined();
-  });
-});
-
-describe("buildFacets", () => {
-  it("collects unique sorted universities and fields, and years newest first", () => {
-    const facets = buildFacets([
-      makeProject({ university: "Cairo University", domains: ["VLSI"], postedAt: "2023-05-01T00:00:00Z" }),
-      makeProject({ university: "Ain Shams University", domains: ["Antennas", "vlsi"], postedAt: "2025-05-01T00:00:00Z" }),
-      makeProject({ university: "cairo university", domains: null, postedAt: "2024-05-01T00:00:00Z" }),
-      makeProject({ university: null, domains: ["Microwave"], postedAt: "2025-01-01T00:00:00Z" }),
-    ]);
-    expect(facets).toEqual({
-      universities: ["Ain Shams University", "Cairo University"],
-      fields: ["Antennas", "Microwave", "VLSI"],
-      years: ["2025", "2024", "2023"],
-    });
-  });
 });
 
 describe("filtersKey / hasActiveFilters", () => {
@@ -113,6 +90,6 @@ describe("filtersKey / hasActiveFilters", () => {
   it("detects any non-empty filter", () => {
     expect(hasActiveFilters(EMPTY_FILTERS)).toBe(false);
     expect(hasActiveFilters({ ...EMPTY_FILTERS, search: "   " })).toBe(false);
-    expect(hasActiveFilters({ ...EMPTY_FILTERS, year: "2025" })).toBe(true);
+    expect(hasActiveFilters({ ...EMPTY_FILTERS, yearRange: { fromYear: 2024, toYear: 2025 } })).toBe(true);
   });
 });
