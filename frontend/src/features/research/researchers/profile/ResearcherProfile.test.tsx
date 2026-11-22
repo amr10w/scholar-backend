@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const { fetchResearcher, fetchScholarProfile } = vi.hoisted(() => ({
+const { fetchResearcher, fetchScholarProfile, isNotFoundError } = vi.hoisted(() => ({
   fetchResearcher: vi.fn(),
   fetchScholarProfile: vi.fn(),
+  isNotFoundError: vi.fn((cause: unknown) => cause instanceof ApiError && cause.status === 404),
 }));
-vi.mock("../researcher.api", () => ({ fetchResearcher, fetchScholarProfile }));
+vi.mock("../researcher.api", () => ({ fetchResearcher, fetchScholarProfile, isNotFoundError }));
 
+import { ApiError } from "@/src/lib/api-client";
 import ResearcherProfile from "./ResearcherProfile";
 import { FIELD_COLORS, OTHER_COLOR } from "./FieldsDonut";
 import {
@@ -96,13 +98,40 @@ describe("ResearcherProfile header", () => {
     expect(fetchResearcher).toHaveBeenCalledWith(2, expect.any(AbortSignal));
   });
 
-  it("shows an error when the researcher can't be loaded", async () => {
-    fetchResearcher.mockRejectedValue(new Error("Researcher not found"));
+  it("shows a not-found state on 404 without flashing while loading", async () => {
+    let rejectRequest!: (err: Error) => void;
+    fetchResearcher.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectRequest = reject;
+      }),
+    );
     render(<ResearcherProfile id={999} onBack={() => {}} />);
 
-    expect(await screen.findByText("Researcher unavailable")).toBeInTheDocument();
-    expect(screen.getByText("Researcher not found")).toBeInTheDocument();
+    expect(screen.getByText("Loading researcher…")).toBeInTheDocument();
+    expect(screen.queryByText("Researcher not found")).toBeNull();
+
+    rejectRequest(new ApiError(404, "Researcher not found"));
+
+    expect(await screen.findByText("Researcher not found")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(fetchScholarProfile).not.toHaveBeenCalled();
+  });
+
+  it("shows a retryable error when the researcher fails to load (non-404)", async () => {
+    const user = userEvent.setup();
+    fetchResearcher
+      .mockRejectedValueOnce(new ApiError(500, "Internal server error"))
+      .mockResolvedValueOnce(RESEARCHERS[1]);
+    fetchScholarProfile.mockResolvedValue(makeScholarProfile());
+
+    render(<ResearcherProfile id={2} onBack={() => {}} />);
+
+    expect(await screen.findByText("Researcher unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Internal server error")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("heading", { name: "Sarah El-Ghandour" })).toBeInTheDocument();
+    expect(fetchResearcher).toHaveBeenCalledTimes(2);
   });
 
   it("calls onBack from the Back to list control", async () => {

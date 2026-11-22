@@ -50,13 +50,13 @@ const ResearcherCard = ({ researcher, onViewProfile }: ResearcherCardProps) => {
         </button>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <h3 className="text-lg font-bold leading-snug text-neutral-50">{name}</h3>
-        {position && <p className="text-sm text-neutral-200">{position}</p>}
+      <div className="flex min-w-0 flex-col gap-1">
+        <h3 className="text-lg font-bold leading-snug text-neutral-50 wrap-break-word">{name}</h3>
+        {position && <p className="text-sm text-neutral-200 wrap-break-word">{position}</p>}
         {university && (
-          <p className="flex items-center gap-1.5 text-xs text-neutral-300">
-            <Building2 className="size-3.5 shrink-0" aria-label="University" />
-            {university}
+          <p className="flex items-start gap-1.5 text-xs text-neutral-300">
+            <Building2 className="mt-0.5 size-3.5 shrink-0" aria-label="University" />
+            <span className="min-w-0 wrap-break-word">{university}</span>
           </p>
         )}
       </div>
