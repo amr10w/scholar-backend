@@ -4,6 +4,7 @@ import type {
   FieldShare,
   PaperSort,
   ResearchPaper,
+  ResearcherFacets,
   ResearcherFilters,
   ResearcherSummary,
   ScholarAuthor,
@@ -36,23 +37,12 @@ export function cleanName(name: string): string {
   return cleaned.replace(/,.*/, "").trim();
 }
 
-function withoutTrailingNote(label: string): string {
-  return label.trim().replace(/(?:^|\s)\([^()]*\)$/u, "").trimEnd();
-}
-
-function firstLetter(word: string): string {
-  return word.match(/\p{L}/u)?.[0] ?? "";
-}
-
 export function getInitials(name: string): string {
-  const initials = withoutTrailingNote(cleanName(name))
-    .split(/\s+/)
-    .map(firstLetter)
-    .filter(Boolean);
-  if (initials.length === 0) return "?";
-  const [first] = initials;
-  const last = initials.length > 1 ? initials.at(-1) : "";
-  return `${first}${last}`.toUpperCase();
+  const words = cleanName(name).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  const first = Array.from(words[0])[0] ?? "";
+  const last = words.length > 1 ? (Array.from(words[words.length - 1])[0] ?? "") : "";
+  return `${first}${last}`.toUpperCase() || "?";
 }
 
 /** Splits a free-form topics value ("A / B, C" or ["A", "B"]) into unique trimmed labels. */
@@ -96,8 +86,8 @@ const MINOR_WORDS = new Set(["of", "in", "the", "for", "and", "at", "de"]);
 
 /** Short badge label for an institution, or undefined when none can be derived. */
 export function abbreviateUniversity(name: string | null | undefined): string | undefined {
-  const trimmed = withoutTrailingNote(name ?? "");
-  if (!hasValue(trimmed)) return undefined;
+  if (!hasValue(name)) return undefined;
+  const trimmed = name.trim();
   const known = KNOWN_ABBREVIATIONS[trimmed.toLowerCase()];
   if (known) return known;
   if (trimmed.length <= 14) return trimmed;
@@ -105,9 +95,8 @@ export function abbreviateUniversity(name: string | null | undefined): string | 
   const acronym = trimmed
     .split(/[\s,\-]+/)
     .filter((word) => word.length > 1 && !MINOR_WORDS.has(word.toLowerCase()))
-    .map(firstLetter)
-    .join("")
-    .toUpperCase();
+    .map((word) => word[0].toUpperCase())
+    .join("");
   return acronym.length >= 2 ? acronym : undefined;
 }
 
@@ -139,23 +128,43 @@ export function toResearcherSummary(researcher: AcademicResearcher): ResearcherS
 
 export const EMPTY_RESEARCHER_FILTERS: ResearcherFilters = {
   search: "",
-  topics: [],
-  departments: [],
-  universities: [],
+  mainTopic: "",
+  department: "",
+  institutionName: "",
 };
 
 /** Stable key for a filter combination; search is trimmed so trailing spaces don't refetch. */
 export function researcherFiltersKey(filters: ResearcherFilters): string {
   return JSON.stringify({
     search: filters.search.trim(),
-    topics: [...filters.topics].sort(),
-    departments: [...filters.departments].sort(),
-    universities: [...filters.universities].sort(),
+    mainTopic: filters.mainTopic.trim(),
+    department: filters.department.trim(),
+    institutionName: filters.institutionName.trim(),
   });
 }
 
 export function hasActiveResearcherFilters(filters: ResearcherFilters): boolean {
   return researcherFiltersKey(filters) !== researcherFiltersKey(EMPTY_RESEARCHER_FILTERS);
+}
+
+function sortedUnique(values: (string | null | undefined)[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const raw of values) {
+    if (!hasValue(raw)) continue;
+    const trimmed = raw.trim();
+    const key = trimmed.toLowerCase();
+    if (!byKey.has(key)) byKey.set(key, trimmed);
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+}
+
+/** Dropdown options sampled from researchers (the API has no facets endpoint). */
+export function buildResearcherFacets(researchers: AcademicResearcher[]): ResearcherFacets {
+  return {
+    topics: sortedUnique(researchers.map((r) => r.mainTopic)),
+    departments: sortedUnique(researchers.map((r) => r.department)),
+    universities: sortedUnique(researchers.map((r) => r.institutionName)),
+  };
 }
 
 /** Appends incoming researchers while preserving order and preventing duplicate ids. */

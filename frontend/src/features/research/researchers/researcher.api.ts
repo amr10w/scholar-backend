@@ -11,12 +11,15 @@ import type {
   UpdateResearcherInput,
 } from "./researcher.type";
 import {
+  buildResearcherFacets,
   cleanName,
   fullName,
   toScholarProfile,
 } from "./researcher.utils";
 
 export const RESEARCHERS_PAGE_SIZE = 12;
+// The API caps `limit` at 100; facets come from up to 100 researchers
+const FACET_SAMPLE_SIZE = 100;
 
 export function getResearcherErrorKind(cause: unknown): ResearcherErrorKind {
   if (cause instanceof ApiError) {
@@ -49,32 +52,20 @@ export function buildResearcherParams({
   sortBy,
   sortOrder,
   researcher,
-  firstName,
-  lastName,
-  topics,
-  departments,
-  universities,
   mainTopic,
   institutionName,
   department,
-}: ResearcherQuery = {}): Record<string, string | number | string[]> {
-  const params: Record<string, string | number | string[]> = { page, limit };
+}: ResearcherQuery = {}): Record<string, string | number> {
+  const params: Record<string, string | number> = { page, limit };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;
 
   const trimmedResearcher = nonEmpty(researcher);
-  const trimmedFirstName = nonEmpty(firstName);
-  const trimmedLastName = nonEmpty(lastName);
   const trimmedTopic = nonEmpty(mainTopic);
   const trimmedInstitution = nonEmpty(institutionName);
   const trimmedDepartment = nonEmpty(department);
 
   if (trimmedResearcher) params.researcher = trimmedResearcher;
-  if (trimmedFirstName) params.firstName = trimmedFirstName;
-  if (trimmedLastName) params.lastName = trimmedLastName;
-  if (topics?.length) params.topics = topics;
-  if (departments?.length) params.departments = departments;
-  if (universities?.length) params.universities = universities;
   if (trimmedTopic) params.mainTopic = trimmedTopic;
   if (trimmedInstitution) params.institutionName = trimmedInstitution;
   if (trimmedDepartment) params.department = trimmedDepartment;
@@ -106,7 +97,6 @@ export async function fetchResearchers(
   const params = buildResearcherParams(query);
   const { data } = await api.get<Paginated<AcademicResearcher>>("/researchers", {
     params,
-    paramsSerializer: { indexes: null },
     signal,
   });
 
@@ -126,8 +116,8 @@ export async function fetchResearchers(
 }
 
 export async function fetchResearcherFacets(signal?: AbortSignal): Promise<ResearcherFacets> {
-  const { data } = await api.get<ApiResponse<ResearcherFacets>>("/researchers/filters", { signal });
-  return data.data;
+  const page = await fetchResearchers({ page: 1, limit: FACET_SAMPLE_SIZE }, signal);
+  return buildResearcherFacets(page.data);
 }
 
 export async function fetchResearcher(

@@ -1,7 +1,6 @@
 import { Router } from "express";
 import {
     getPublicationsController,
-    getPublicationFiltersController,
     getPublicationByIdController,
     createPublicationController,
     updatePublicationController,
@@ -13,7 +12,6 @@ const router = Router();
 
 
 router.get("/", getPublicationsController);
-router.get("/filters", getPublicationFiltersController);
 router.get("/:id", getPublicationByIdController);
 router.post("/", isAuthenticated, createPublicationController);
 router.patch("/:id", isAuthenticated, updatePublicationController);

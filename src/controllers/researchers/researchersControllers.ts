@@ -1,22 +1,5 @@
-import type { RequestHandler } from "express";
-import asyncHandler from "../../lib/async.handler.js";
-import { catalogFacetValues, readFacetValues } from "../../utils/catalogFacets.js";
 import { db } from "../../db/db_config.js";
 
-
-export const getResearcherFacets: RequestHandler = asyncHandler(async (_req, res) => {
-    const [topics, departments, universities] = await Promise.all([
-        db.academicResearcher.groupBy({ by: ["mainTopic"] }),
-        db.academicResearcher.groupBy({ by: ["department"] }),
-        db.academicResearcher.groupBy({ by: ["institutionName"] }),
-    ]);
-
-    res.json({ success: true, data: {
-        topics: catalogFacetValues(topics.map(row => row.mainTopic)),
-        departments: catalogFacetValues(departments.map(row => row.department)),
-        universities: catalogFacetValues(universities.map(row => row.institutionName)),
-    } });
-});
 
 export const getResearchersController = async (req, res) => {
     try {
@@ -56,11 +39,6 @@ export const getResearchersController = async (req, res) => {
 
         const sortDirection = sortOrder === "desc" ? "desc" : "asc";
 
-        const topics = readFacetValues(req.query.topics);
-        const departments = readFacetValues(req.query.departments);
-        const universities = readFacetValues(req.query.universities);
-        const mode = "insensitive" as const;
-
         const where = {
             ...(id && {
                 id: parseInt(id as string, 10),
@@ -77,14 +55,14 @@ export const getResearchersController = async (req, res) => {
                     mode: "insensitive" as const,
                 },
             }),
-            ...(topics.length ? { mainTopic: { in: topics, mode } } : mainTopic && {
+            ...(mainTopic && {
                 mainTopic: {
                     contains: mainTopic as string,
                     mode: "insensitive" as const,
                 },
             }),
 
-            ...(universities.length ? { institutionName: { in: universities, mode } } : institutionName && {
+            ...(institutionName && {
                 institutionName: {
                     contains: institutionName as string,
                     mode: "insensitive" as const,
@@ -115,7 +93,7 @@ export const getResearchersController = async (req, res) => {
                 },
             }),
 
-            ...(departments.length ? { department: { in: departments, mode } } : department && {
+            ...(department && {
                 department: {
                     contains: department as string,
                     mode: "insensitive" as const,

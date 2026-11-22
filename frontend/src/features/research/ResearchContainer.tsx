@@ -1,11 +1,13 @@
-import ResearchListSkeleton from "./ResearchListSkeleton";
 import { Suspense } from "react";
 import ResearchTabsClient from "./ResearchTabsClient";
 import ResearchInfoCard, { ResearchInfoCardProps } from "./ResearchInfoCard";
-import PapersExplorer from "./papers/PapersExplorer";
-import { PublicationsPanel } from "./publications";
-import { ResearchersPanel } from "./researchers";
-import { ProjectsPanel } from "./projects";
+import ResearchContent from "./ResearchContent";
+import {
+  PublicationsPanel,
+  PublicationsPanelSkeleton,
+} from "./publications";
+import { ResearchersPanel, ResearchersPanelSkeleton } from "./researchers";
+import { ProjectsPanel, ProjectsPanelSkeleton } from "./projects";
 import { TabType } from "./Research.type";
 
 const RESEARCH_DATA: Record<TabType, ResearchInfoCardProps> = {
@@ -22,12 +24,12 @@ const RESEARCH_DATA: Record<TabType, ResearchInfoCardProps> = {
   papers: {
     title: "Discover Academic Papers",
     description:
-      "Explore academic papers and citation networks across top journals and research platforms.",
+      " Explore academic papers and citation networks across top journals and research platforms.",
   },
   publications: {
     title: "Compare Publications",
     description:
-      "Search journals and transactions by title, acronym or ISSN to compare publication metrics and fees.",
+      "Filter journals and transactions by category, access model, metrics, fees and review speed to find where to submit.",
   },
   projects: {
     title: "Explore Graduation Projects",
@@ -40,7 +42,7 @@ const ResearchContainer = ({ activeTab }: { activeTab: TabType }) => {
   const currentInfo = RESEARCH_DATA[activeTab];
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-6">
+    <div className="w-full max-w-7xl mx-auto flex flex-col pt-8 pb-24 px-4 md:px-8 tracking-eyebrow">
       {/* Info Card */}
       <ResearchInfoCard
         title={currentInfo.title}
@@ -53,19 +55,19 @@ const ResearchContainer = ({ activeTab }: { activeTab: TabType }) => {
 
       {/* Content */}
       {activeTab === "publications" ? (
-        <Suspense fallback={<ResearchListSkeleton tab="publications" />}>
+        <Suspense fallback={<PublicationsPanelSkeleton />}>
           <PublicationsPanel />
         </Suspense>
       ) : activeTab === "researchers" ? (
-        <Suspense fallback={<ResearchListSkeleton tab="researchers" />}>
+        <Suspense fallback={<ResearchersPanelSkeleton />}>
           <ResearchersPanel />
         </Suspense>
       ) : activeTab === "projects" ? (
-        <Suspense fallback={<ResearchListSkeleton tab="projects" />}>
+        <Suspense fallback={<ProjectsPanelSkeleton />}>
           <ProjectsPanel />
         </Suspense>
       ) : (
-        <PapersExplorer />
+        <ResearchContent activeTab={activeTab} />
       )}
     </div>
   );

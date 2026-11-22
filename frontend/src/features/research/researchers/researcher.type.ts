@@ -27,29 +27,31 @@ export type ResearcherSortField =
 
 export type SortOrder = "asc" | "desc";
 
-/** Values available in the full researcher catalog. */
-export interface ResearcherFacets {
-  topics: string[];
-  departments: string[];
-  universities: string[];
-}
-
-/** Query params supported by GET /api/researchers. */
-export interface ResearcherQuery extends Partial<ResearcherFacets> {
+/** Query params supported by GET /api/researchers */
+export interface ResearcherQuery {
   page?: number;
   limit?: number;
   sortBy?: ResearcherSortField;
   sortOrder?: SortOrder;
   researcher?: string;
-  firstName?: string;
-  lastName?: string;
   mainTopic?: string;
   institutionName?: string;
   department?: string;
 }
 
-export interface ResearcherFilters extends ResearcherFacets {
+/** Controlled filter state for the Researchers toolbar */
+export interface ResearcherFilters {
   search: string;
+  mainTopic: string;
+  department: string;
+  institutionName: string;
+}
+
+/** Distinct dropdown options sampled from GET /api/researchers */
+export interface ResearcherFacets {
+  topics: string[];
+  departments: string[];
+  universities: string[];
 }
 
 /** Payload for POST /api/researchers (auth required) */

@@ -1,12 +1,5 @@
 import { Prisma } from "@prisma/client";
 import { db } from "../../db/db_config.js";
-import asyncHandler from "../../lib/async.handler.js";
-import {
-    getPublicationFacets,
-    publicationFilterSchema,
-    publicationFilterWhere,
-    publicationMetricOrder,
-} from "./publicationFilters.js";
 
 const ALLOWED_SORT_FIELDS = [
     "id",
@@ -19,17 +12,6 @@ const ALLOWED_SORT_FIELDS = [
 
 type SortField = (typeof ALLOWED_SORT_FIELDS)[number];
 
-const publicationInclude = {
-    subCategory: { include: { domain: true } },
-    yearlyMetrics: { orderBy: publicationMetricOrder },
-    pricings: { orderBy: { pricingYear: "desc" } },
-    editorialStats: true,
-} satisfies Prisma.AcademicPublicationInclude;
-
-
-export const getPublicationFiltersController = asyncHandler(async (_req, res) => {
-    res.json({ success: true, data: await getPublicationFacets() });
-});
 
 export const getPublicationsController = async (req, res) => {
     try {
@@ -53,13 +35,7 @@ export const getPublicationsController = async (req, res) => {
 
         const searchTerm = String(search).trim();
 
-        const filters = publicationFilterSchema.safeParse(req.query);
-        if (!filters.success) {
-            return res.status(400).json({ success: false, message: "Invalid publication filters" });
-        }
-
-        const where: Prisma.AcademicPublicationWhereInput = {
-            ...(await publicationFilterWhere(filters.data)),
+        const where = {
             ...(searchTerm && {
                 OR: [
                     {
@@ -139,7 +115,9 @@ export const getPublicationsController = async (req, res) => {
                 orderBy: {
                     [sortField]: order,
                 },
-                include: publicationInclude,
+                include: {
+                    subCategory: true,
+                },
             }),
 
             db.academicPublication.count({
@@ -181,7 +159,9 @@ export const getPublicationByIdController = async (req, res) => {
 
         const publication = await db.academicPublication.findUnique({
             where: { id: publicationId },
-            include: publicationInclude,
+            include: {
+                subCategory: true,
+            },
         });
 
         if (!publication) {

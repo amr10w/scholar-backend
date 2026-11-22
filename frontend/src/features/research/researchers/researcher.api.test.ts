@@ -55,10 +55,6 @@ describe("buildResearcherParams", () => {
         sortOrder: "desc",
         researcher: "  Hassan Ali  ",
         mainTopic: "  ",
-        firstName: "  Hassan  ",
-        lastName: "Ali",
-        topics: ["VLSI & Hardware", "Robotics"],
-        departments: [],
         institutionName: "VLSI & Hardware",
         department: "",
       }),
@@ -68,9 +64,6 @@ describe("buildResearcherParams", () => {
       sortBy: "lastName",
       sortOrder: "desc",
       researcher: "Hassan Ali",
-      firstName: "Hassan",
-      lastName: "Ali",
-      topics: ["VLSI & Hardware", "Robotics"],
       institutionName: "VLSI & Hardware",
     });
   });
@@ -100,7 +93,6 @@ describe("fetchResearchers", () => {
         researcher: "Hassan",
         mainTopic: "VLSI & Hardware",
       },
-      paramsSerializer: { indexes: null },
       signal: undefined,
     });
   });
@@ -139,16 +131,25 @@ describe("fetchResearchers", () => {
 });
 
 describe("fetchResearcherFacets", () => {
-  it("requests options from the full catalog instead of sampling a page", async () => {
-    const facets = {
+  it("samples up to 100 researchers and returns unique sorted facets", async () => {
+    get.mockResolvedValue({
+      data: {
+        success: true,
+        data: RESEARCHERS,
+        pagination: { total: 3, page: 1, limit: 100, totalPages: 1 },
+      },
+    });
+
+    const facets = await fetchResearcherFacets();
+    expect(get).toHaveBeenCalledWith("/researchers", {
+      params: { page: 1, limit: 100 },
+      signal: undefined,
+    });
+    expect(facets).toEqual({
       topics: ["NLP", "VLSI"],
       departments: ["Marine Biology", "School of Sciences"],
       universities: ["Alexandria University", "American University in Cairo"],
-    };
-    get.mockResolvedValue({ data: { success: true, data: facets } });
-
-    await expect(fetchResearcherFacets()).resolves.toEqual(facets);
-    expect(get).toHaveBeenCalledWith("/researchers/filters", { signal: undefined });
+    });
   });
 });
 

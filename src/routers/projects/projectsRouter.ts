@@ -1,10 +1,7 @@
 import { Router } from "express";
 import {
-    getProjectFacets,
-    getProjectYears,
     getProjectsController,
     getProjectsByIdController,
-    getCatalogProjectController,
     createProjectController,
     updateProjectController,
     deleteProjectController,
@@ -15,9 +12,6 @@ const router = Router();
 
 
 router.get("/", getProjectsController);
-router.get("/years", getProjectYears);
-router.get("/catalog/:id", getCatalogProjectController);
-router.get("/filters", getProjectFacets);
 router.get("/:id", getProjectsByIdController);
 router.post("/", isAuthenticated, createProjectController);
 router.patch("/:id", isAuthenticated, updateProjectController);

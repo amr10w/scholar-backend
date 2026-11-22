@@ -1,4 +1,3 @@
-import { CATALOG_GRID } from "@/src/components/catalog/CatalogCard";
 import ResearcherCard from "./ResearcherCard";
 import type { ResearcherSummary } from "./researcher.type";
 
@@ -7,11 +6,8 @@ interface ResearcherGridProps {
   onViewProfile: (id: number) => void;
 }
 
-const ResearcherGrid = ({
-  researchers,
-  onViewProfile,
-}: ResearcherGridProps) => (
-  <div className={CATALOG_GRID}>
+const ResearcherGrid = ({ researchers, onViewProfile }: ResearcherGridProps) => (
+  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
     {researchers.map((researcher) => (
       <ResearcherCard
         key={researcher.id}

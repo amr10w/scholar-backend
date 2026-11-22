@@ -6,39 +6,31 @@ import GlobeIcon from "@iconify-react/lucide/globe";
 
 const cards1 = [
   {
-    title: "Meet the researchers",
-    description:
-      "Discover academic experts, research interests, and university connections.",
-    cardAction: "View researchers",
-    href: "/research?tab=researchers",
+    title: "Card 1",
+    description: "description for Card 1",
+    cardAction: "start exploring",
   },
   {
-    title: "Find where to publish",
-    description:
-      "Compare journals by research area, access model, metrics, and publication fees.",
-    cardAction: "Compare publications",
-    href: "/research?tab=publications",
+    title: "Card 2",
+    description: "description for Card 2",
+    cardAction: "view Researchrs",
   },
 ];
 const cards2 = [
   {
-    title: "Explore academic papers",
-    description:
-      "Browse studies in semiconductor design, embedded systems, and applied research.",
-    cardAction: "Explore papers",
-    href: "/research?tab=papers",
+    title: "Card 3",
+    description: "description for Card 3",
+    cardAction: "explore papers",
   },
   {
-    title: "Discover graduation projects",
-    description:
-      "See student ideas, academic supervisors, and industry-supported projects.",
-    cardAction: "Browse projects",
-    href: "/research?tab=projects",
+    title: "Card 4",
+    description: "description for Card 4",
+    cardAction: "browse projects",
   },
 ];
 
 const acadicCardsClassName =
-  "flex-1 flex-col w-full items-start lg:max-w-126.25 p-5!";
+  "flex-1 flex-col w-full items-start lg:max-w-126.25 lg:max-h-45.5 p-5!";
 
 const AcademicEcosystem = () => {
   return (
@@ -77,7 +69,6 @@ const AcademicEcosystem = () => {
               title={card.title}
               description={card.description}
               callToAction={card.cardAction}
-              href={card.href}
               intent="primary"
               btnIntent="accent"
               className={acadicCardsClassName}
@@ -100,7 +91,6 @@ const AcademicEcosystem = () => {
               title={card.title}
               description={card.description}
               callToAction={card.cardAction}
-              href={card.href}
               intent="primary"
               btnIntent="accent"
               className={acadicCardsClassName}

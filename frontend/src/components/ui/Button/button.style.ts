@@ -57,9 +57,9 @@ const getButtonClasses = ({ variant, intent, size = "md", disabled = false }: Bu
 
   const variants: Record<ButtonVariant, Record<ButtonIntent, string>> = {
     solid: {
-      primary:   "bg-action-primary text-on-action",
+      primary:   "bg-primary-500 text-neutral-50",
       secondary: "bg-neutral-100 text-neutral-900",
-      accent:    "bg-action-accent text-on-action",
+      accent:    "bg-accent-600 text-neutral-50",
       danger:    "bg-transparent text-neutral-50",
     },
     link: {
@@ -105,9 +105,9 @@ export const getHoverOverlay = (
   const overlays: Partial<Record<ButtonVariant, Record<ButtonIntent, string>>> =
     {
       solid: {
-        primary:   "from-action-primary to-action-primary-hover",
+        primary:   "from-primary-300 to-primary-700",
         secondary: "from-neutral-100 to-neutral-500",
-        accent:    "from-action-accent to-action-accent-hover",
+        accent:    "from-accent-300 to-accent-800",
         danger:    "from-danger-400 to-danger-600",
       },
     };
