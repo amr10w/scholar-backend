@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, Loader2 } from "lucide-react";
+import Button from "@/src/components/ui/Button/Button";
 import ProfileHeader from "./ProfileHeader";
 import { ProfileStats, ProfileStatsSkeleton } from "./ProfileStats";
 import ProfileTabs, { type ProfileTabId } from "./ProfileTabs";
@@ -56,7 +57,7 @@ function renderTab(tab: ProfileTabId, scholar: ScholarState) {
 }
 
 const ResearcherProfile = ({ id, initialResearcher, onBack }: ResearcherProfileProps) => {
-  const { researcher, scholar } = useResearcherProfile(id, initialResearcher);
+  const { researcher, scholar, retry } = useResearcherProfile(id, initialResearcher);
   const profile = scholar.status === "ready" ? scholar.profile : null;
 
   return (
@@ -77,10 +78,28 @@ const ResearcherProfile = ({ id, initialResearcher, onBack }: ResearcherProfileP
         </div>
       )}
 
+      {researcher.status === "not_found" && (
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+          <h2 className="text-2xl font-semibold text-accent-300">Researcher not found</h2>
+          <p className="max-w-md text-neutral-100">
+            We couldn&apos;t find a researcher matching this ID.
+          </p>
+        </div>
+      )}
+
       {researcher.status === "error" && (
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
           <h2 className="text-2xl font-semibold text-danger-300">Researcher unavailable</h2>
           <p className="max-w-md text-neutral-100">{researcher.message}</p>
+          <Button
+            type="button"
+            variant="outlined"
+            intent="accent"
+            size="md"
+            onClick={retry}
+          >
+            Try again
+          </Button>
         </div>
       )}
 

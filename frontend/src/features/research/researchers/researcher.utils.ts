@@ -4,6 +4,8 @@ import type {
   FieldShare,
   PaperSort,
   ResearchPaper,
+  ResearcherFacets,
+  ResearcherFilters,
   ResearcherSummary,
   ScholarAuthor,
   ScholarCollaborator,
@@ -38,9 +40,9 @@ export function cleanName(name: string): string {
 export function getInitials(name: string): string {
   const words = cleanName(name).split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
-  const first = words[0][0];
-  const last = words.length > 1 ? words[words.length - 1][0] : "";
-  return `${first}${last}`.toUpperCase();
+  const first = Array.from(words[0])[0] ?? "";
+  const last = words.length > 1 ? (Array.from(words[words.length - 1])[0] ?? "") : "";
+  return `${first}${last}`.toUpperCase() || "?";
 }
 
 /** Splits a free-form topics value ("A / B, C" or ["A", "B"]) into unique trimmed labels. */
@@ -119,7 +121,66 @@ export function toResearcherSummary(researcher: AcademicResearcher): ResearcherS
     university,
     universityAbbr: abbreviateUniversity(university),
     tags,
+    scholarId: researcher.scholarId ?? null,
+    createdAt: researcher.createdAt,
   };
+}
+
+export const EMPTY_RESEARCHER_FILTERS: ResearcherFilters = {
+  search: "",
+  mainTopic: "",
+  department: "",
+  institutionName: "",
+};
+
+/** Stable key for a filter combination; search is trimmed so trailing spaces don't refetch. */
+export function researcherFiltersKey(filters: ResearcherFilters): string {
+  return JSON.stringify({
+    search: filters.search.trim(),
+    mainTopic: filters.mainTopic.trim(),
+    department: filters.department.trim(),
+    institutionName: filters.institutionName.trim(),
+  });
+}
+
+export function hasActiveResearcherFilters(filters: ResearcherFilters): boolean {
+  return researcherFiltersKey(filters) !== researcherFiltersKey(EMPTY_RESEARCHER_FILTERS);
+}
+
+function sortedUnique(values: (string | null | undefined)[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const raw of values) {
+    if (!hasValue(raw)) continue;
+    const trimmed = raw.trim();
+    const key = trimmed.toLowerCase();
+    if (!byKey.has(key)) byKey.set(key, trimmed);
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+}
+
+/** Dropdown options sampled from researchers (the API has no facets endpoint). */
+export function buildResearcherFacets(researchers: AcademicResearcher[]): ResearcherFacets {
+  return {
+    topics: sortedUnique(researchers.map((r) => r.mainTopic)),
+    departments: sortedUnique(researchers.map((r) => r.department)),
+    universities: sortedUnique(researchers.map((r) => r.institutionName)),
+  };
+}
+
+/** Appends incoming researchers while preserving order and preventing duplicate ids. */
+export function mergeUniqueResearchers(
+  existing: AcademicResearcher[],
+  incoming: AcademicResearcher[],
+): AcademicResearcher[] {
+  const seen = new Set(existing.map((item) => item.id));
+  const merged = [...existing];
+  for (const item of incoming) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      merged.push(item);
+    }
+  }
+  return merged;
 }
 
 /** 3200 → "3.2k", 12100 → "12.1k", 1250000 → "1.3M". */

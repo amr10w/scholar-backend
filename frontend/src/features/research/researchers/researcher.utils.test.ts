@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  EMPTY_RESEARCHER_FILTERS,
   abbreviateUniversity,
   aggregateFields,
   avatarTone,
+  buildResearcherFacets,
   cleanName,
   filterAndSortPapers,
   formatCompact,
   getInitials,
   googleScholarUrl,
+  hasActiveResearcherFilters,
   hasValue,
+  mergeUniqueResearchers,
+  researcherFiltersKey,
   semanticScholarUrl,
   toResearcherSummary,
   toScholarProfile,
@@ -40,10 +45,12 @@ describe("cleanName / getInitials", () => {
     expect(cleanName("Associate Professor Sarah El-Ghandour")).toBe("Sarah El-Ghandour");
   });
 
-  it("uses first and last name initials, ignoring titles", () => {
+  it("uses first and last name initials, ignoring titles and supporting non-Latin scripts", () => {
     expect(getInitials("Dr. Sarah El-Ghandour")).toBe("SE");
     expect(getInitials("Prof. Dr. Ahmed Hassan Mahmoud")).toBe("AM");
     expect(getInitials("Madonna")).toBe("M");
+    expect(getInitials("أحمد المنصوري")).toBe("أا");
+    expect(getInitials("健太 田中")).toBe("健田");
     expect(getInitials("")).toBe("?");
   });
 });
@@ -88,7 +95,7 @@ describe("abbreviateUniversity", () => {
 });
 
 describe("toResearcherSummary", () => {
-  it("maps a full API row to card data", () => {
+  it("maps a full API row to card data and retains scholarId/createdAt", () => {
     expect(toResearcherSummary(RESEARCHERS[1])).toEqual({
       id: 2,
       name: "Sarah El-Ghandour",
@@ -97,6 +104,8 @@ describe("toResearcherSummary", () => {
       university: "American University in Cairo",
       universityAbbr: "AUC",
       tags: ["NLP", "Machine Learning", "Arabic Dialects"],
+      scholarId: "123456",
+      createdAt: "2026-01-01T00:00:00.000Z",
     });
   });
 
@@ -248,5 +257,34 @@ describe("filterAndSortPapers", () => {
     const copy = [...papers];
     filterAndSortPapers(papers, "", "cited");
     expect(papers).toEqual(copy);
+  });
+});
+
+describe("filter, facet and merge helpers", () => {
+  it("builds unique sorted facets and drops placeholders", () => {
+    expect(buildResearcherFacets(RESEARCHERS)).toEqual({
+      topics: ["NLP", "VLSI"],
+      departments: ["Marine Biology", "School of Sciences"],
+      universities: ["Alexandria University", "American University in Cairo"],
+    });
+  });
+
+  it("trims search when comparing filter keys and detects active filters", () => {
+    expect(
+      researcherFiltersKey({ ...EMPTY_RESEARCHER_FILTERS, search: "  Hassan  " }),
+    ).toBe(researcherFiltersKey({ ...EMPTY_RESEARCHER_FILTERS, search: "Hassan" }));
+    expect(hasActiveResearcherFilters(EMPTY_RESEARCHER_FILTERS)).toBe(false);
+    expect(hasActiveResearcherFilters({ ...EMPTY_RESEARCHER_FILTERS, search: "   " })).toBe(false);
+    expect(
+      hasActiveResearcherFilters({ ...EMPTY_RESEARCHER_FILTERS, mainTopic: "Robotics" }),
+    ).toBe(true);
+  });
+
+  it("merges incoming researchers without duplicating existing ids", () => {
+    const merged = mergeUniqueResearchers(
+      [RESEARCHERS[0], RESEARCHERS[1]],
+      [RESEARCHERS[1], RESEARCHERS[2]],
+    );
+    expect(merged.map((r) => r.id)).toEqual([1, 2, 3]);
   });
 });

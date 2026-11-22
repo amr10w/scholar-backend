@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchResearcher, fetchScholarProfile } from "../researcher.api";
+import { fetchResearcher, fetchScholarProfile, isNotFoundError } from "../researcher.api";
 import type { AcademicResearcher, ScholarProfile } from "../researcher.type";
 
 export type ResearcherState =
   | { status: "loading" }
   | { status: "ready"; researcher: AcademicResearcher }
+  | { status: "not_found"; message: string }
   | { status: "error"; message: string };
 
 export type ScholarState =
@@ -23,6 +24,7 @@ function errorMessage(cause: unknown, fallback: string): string {
  * Mount it under `key={id}` so switching researchers starts from fresh state.
  */
 export function useResearcherProfile(id: number, initial?: AcademicResearcher) {
+  const [attempt, setAttempt] = useState(0);
   const [researcher, setResearcher] = useState<ResearcherState>(
     initial ? { status: "ready", researcher: initial } : { status: "loading" },
   );
@@ -35,21 +37,31 @@ export function useResearcherProfile(id: number, initial?: AcademicResearcher) {
     (async () => {
       let record = initial;
       if (!record) {
+        if (attempt > 0) setResearcher({ status: "loading" });
         try {
           record = await fetchResearcher(id, signal);
+          if (signal.aborted) return;
           setResearcher({ status: "ready", researcher: record });
         } catch (cause) {
           if (signal.aborted) return;
-          setResearcher({
-            status: "error",
-            message: errorMessage(cause, "Couldn't load this researcher."),
-          });
+          if (isNotFoundError(cause)) {
+            setResearcher({
+              status: "not_found",
+              message: errorMessage(cause, "Researcher not found."),
+            });
+          } else {
+            setResearcher({
+              status: "error",
+              message: errorMessage(cause, "Couldn't load this researcher."),
+            });
+          }
           return;
         }
       }
 
       try {
         const profile = await fetchScholarProfile(record, signal);
+        if (signal.aborted) return;
         setScholar({ status: "ready", profile });
       } catch (cause) {
         if (signal.aborted) return;
@@ -61,7 +73,9 @@ export function useResearcherProfile(id: number, initial?: AcademicResearcher) {
     })();
 
     return () => controller.abort();
-  }, [id, initial]);
+  }, [id, initial, attempt]);
 
-  return { researcher, scholar };
+  const retry = () => setAttempt((value) => value + 1);
+
+  return { researcher, scholar, retry };
 }
