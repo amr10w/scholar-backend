@@ -52,8 +52,8 @@ describe("ProjectDetails", () => {
         screen.queryByRole("link", { name: /View documentation/ }),
       ).not.toBeInTheDocument();
       expect(
-        screen.getByRole("link", { name: "Back to projects" }),
-      ).toHaveAttribute("href", "/research?tab=projects");
+        screen.getByRole("button", { name: "Back to list" }),
+      ).toBeInTheDocument();
     },
   );
 });

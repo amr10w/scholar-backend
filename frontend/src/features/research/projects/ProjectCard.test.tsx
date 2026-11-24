@@ -29,7 +29,7 @@ describe("ProjectCard", () => {
     expect(card.getByText("Sponsored By Siemens EDA")).toBeInTheDocument();
 
     const link = card.getByRole("link", { name: `Show more about ${project.title}` });
-    expect(link).toHaveAttribute("href", `/research/projects/${project.id}`);
+    expect(link).toHaveAttribute("href", `/research?tab=projects&project=${project.id}`);
     expect(link).toHaveTextContent("Show more");
   });
 
@@ -43,7 +43,7 @@ describe("ProjectCard", () => {
     expect(screen.queryByText(/Sponsored By/)).toBeNull();
     expect(screen.queryByRole("list", { name: "Project fields" })).toBeNull();
     expect(within(card).getByRole("link", { name: "Show more about Untitled project" }))
-      .toHaveAttribute("href", "/research/projects/9");
+      .toHaveAttribute("href", "/research?tab=projects&project=9");
     expect(card.textContent).not.toMatch(/undefined|null|N\/A/);
   });
 });

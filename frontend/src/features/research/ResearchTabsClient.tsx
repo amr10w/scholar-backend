@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { RESEARCH_DETAIL_PARAMS } from "./ResearchDetailShell";
 import ResearchTabs from "./ResearchTabs";
 import { TabType } from "./Research.type";
 
@@ -17,10 +18,16 @@ export default function ResearchTabsClient({
 
 	const handleTabChange = (tab: TabType) => {
 		const params = new URLSearchParams(searchParams.toString());
+		for (const detailParam of RESEARCH_DETAIL_PARAMS) {
+			params.delete(detailParam);
+		}
 		params.set("tab", tab);
-		// Using push, but can use replace if preferred. We'll use push as a default or replace if better.
-		// The user didn't explicitly answer the question about push vs replace, so I'll use replace as it's typically better for tabs.
-		router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+		const nextUrl = `${pathname}?${params.toString()}`;
+		if (tab === activeTab) {
+			window.history.pushState(null, "", nextUrl);
+			return;
+		}
+		router.replace(nextUrl, { scroll: false });
 	};
 
 	return <ResearchTabs activeTab={activeTab} onTabChange={handleTabChange} />;

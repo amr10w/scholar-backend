@@ -123,7 +123,7 @@ afterEach(() => {
 });
 
 describe("PublicationsExplorer (CatalogLayout theme)", () => {
-  it("renders initial page cards without refetching, links to /research/publications/:id, and hides unsafe URLs", () => {
+  it("renders initial page cards without refetching, links to /research?tab=publications&publication=:id, and hides unsafe URLs", () => {
     render(
       <PublicationsExplorer
         initialPage={makePage([PUB_JAIR, PUB_MINIMAL, PUB_UNSAFE_URL], {
@@ -140,7 +140,7 @@ describe("PublicationsExplorer (CatalogLayout theme)", () => {
       screen.getByRole("link", {
         name: "Show more about Journal of Artificial Intelligence Research",
       }),
-    ).toHaveAttribute("href", "/research/publications/1");
+    ).toHaveAttribute("href", "/research?tab=publications&publication=1");
 
     expect(
       screen.getByRole("link", {
@@ -250,8 +250,9 @@ describe("PublicationDetails (/research/publications/[id])", () => {
     ).toHaveAttribute("href", "https://jair.org/");
   });
 
-  it("renders not-found and error states via CatalogDetailState", () => {
+  it("renders researcher-style not-found and error states with Back to list", () => {
     const reload = vi.fn();
+    const onBack = vi.fn();
     vi.mocked(useCatalogDetail).mockReturnValue({
       data: undefined,
       loading: false,
@@ -260,12 +261,14 @@ describe("PublicationDetails (/research/publications/[id])", () => {
       reload,
     });
 
-    const { rerender } = render(<PublicationDetails id="1" />);
+    const { rerender } = render(<PublicationDetails id="1" onBack={onBack} />);
     expect(
-      screen.getByRole("heading", { name: "Could not load this publication" }),
+      screen.getByRole("heading", { name: "Publication unavailable" }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(reload).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Back to list" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
 
     vi.mocked(useCatalogDetail).mockReturnValue({
       data: undefined,
@@ -274,9 +277,34 @@ describe("PublicationDetails (/research/publications/[id])", () => {
       notFound: true,
       reload,
     });
-    rerender(<PublicationDetails id="99999" />);
+    rerender(<PublicationDetails id="99999" onBack={onBack} />);
     expect(
       screen.getByRole("heading", { name: "Publication not found" }),
     ).toBeInTheDocument();
+  });
+
+  it("omits missing optional fields cleanly without showing 'Not provided'", () => {
+    vi.mocked(useCatalogDetail).mockReturnValue({
+      data: PUB_MINIMAL,
+      loading: false,
+      error: undefined,
+      notFound: false,
+      reload: vi.fn(),
+    });
+
+    render(<PublicationDetails id="11" />);
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Mock Minimalist Publication Without Optional Metadata",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Not provided")).toBeNull();
+    expect(screen.queryByText("ISSN")).toBeNull();
+    expect(screen.queryByText("eISSN")).toBeNull();
+    expect(screen.queryByText("Imprint")).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /Visit publication website/i }),
+    ).toBeNull();
   });
 });

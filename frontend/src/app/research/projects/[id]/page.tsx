@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import ProjectDetails from "@/src/features/research/projects/ProjectDetails";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = { title: "Project details | NEXUS" };
 
@@ -9,5 +9,5 @@ export default async function ProjectPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <ProjectDetails id={id} />;
+  redirect(`/research?tab=projects&project=${encodeURIComponent(id)}`);
 }
