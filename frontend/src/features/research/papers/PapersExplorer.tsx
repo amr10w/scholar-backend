@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { BookOpen, FileSearch, Search, SearchX } from "lucide-react";
 import CatalogCard, {
@@ -19,9 +20,11 @@ import { Input } from "@/src/components/ui/InputField/Input";
 import { OptionList } from "@/src/components/ui/OptionList/OptionList";
 import { useDebouncedValue } from "@/src/hooks/useDebouncedValue";
 import type { Paginated } from "@/src/lib/api-client";
+import { ResearchCatalogSwap } from "../ResearchDetailShell";
 import ResearchYearFilter from "../ResearchYearFilter";
 import type { YearRange } from "../researchYears.api";
 import { canFindSimilarForPaper } from "./explore.api";
+import PaperDetails from "./PaperDetails";
 import PapersExploreSection from "./PapersExploreSection";
 import {
   PAPERS_PAGE_SIZE,
@@ -30,6 +33,8 @@ import {
   type PaperSortOrder,
   type ResearchPaper,
 } from "./paper.api";
+
+export const PAPER_PARAM = "paper";
 
 const PAPER_CARD_ACTION_CLASSES = `${getButtonClasses({ variant: "outlined", intent: "accent", size: "md" })} min-h-11 h-full w-full gap-1.5 whitespace-nowrap px-2.5 text-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-200`;
 
@@ -86,11 +91,31 @@ const PAPER_SORT_OPTIONS: {
 ];
 
 export default function PapersExplorer() {
+  const searchParams = useSearchParams();
+  const selectedId = searchParams?.get(PAPER_PARAM)?.trim() || null;
+
   const [search, setSearch] = useState("");
   const [yearRange, setYearRange] = useState<YearRange>(null);
   const [sortKey, setSortKey] = useState<PaperSortOptionKey>("year_desc");
   const [page, setPage] = useState(1);
   const [retry, setRetry] = useState(0);
+
+  const navigate = (
+    id: number | string | null,
+    options?: { similar?: boolean },
+  ) => {
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.set("tab", "papers");
+    if (id === null) {
+      params.delete(PAPER_PARAM);
+      params.delete("similar");
+    } else {
+      params.set(PAPER_PARAM, String(id));
+      if (options?.similar) params.set("similar", "1");
+      else params.delete("similar");
+    }
+    window.history.pushState(null, "", `?${params.toString()}`);
+  };
 
   const activeSort =
     PAPER_SORT_OPTIONS.find((opt) => opt.value === sortKey) ??
@@ -164,202 +189,251 @@ export default function PapersExplorer() {
     : 0;
 
   return (
-    <div className="flex min-w-0 flex-col gap-8">
-      <CatalogLayout
-        resultsLabel="Paper results"
-        activeFilterCount={yearRange ? 1 : 0}
-        search={
-          <Input
-            type="search"
-            aria-label="Search papers"
-            placeholder="Search by title, journal or DOI"
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-            endAdornment={<Search aria-hidden="true" className="size-5" />}
-          />
-        }
-        toolbar={
-          <FilterPill label={`Sort: ${activeSort.label}`}>
-            <OptionList<PaperSortOptionKey>
-              inputType="radio"
-              options={PAPER_SORT_OPTIONS.map(({ value, label }) => ({
-                value,
-                label,
-              }))}
-              selected={[sortKey]}
-              onToggle={(nextKey) => {
-                setSortKey(nextKey);
+    <ResearchCatalogSwap
+      activeId={selectedId}
+      renderDetail={(shownId) => (
+        <PaperDetails
+          id={shownId}
+          initialPaper={data?.data.find(
+            (paper) => String(paper.id) === shownId,
+          )}
+          onBack={() => navigate(null)}
+        />
+      )}
+    >
+      <div className="flex min-w-0 flex-col gap-8">
+        <CatalogLayout
+          resultsLabel="Paper results"
+          activeFilterCount={yearRange ? 1 : 0}
+          search={
+            <Input
+              type="search"
+              aria-label="Search papers"
+              placeholder="Search by title, journal or DOI"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              endAdornment={<Search aria-hidden="true" className="size-5" />}
+            />
+          }
+          toolbar={
+            <FilterPill label={`Sort: ${activeSort.label}`}>
+              <OptionList<PaperSortOptionKey>
+                inputType="radio"
+                options={PAPER_SORT_OPTIONS.map(({ value, label }) => ({
+                  value,
+                  label,
+                }))}
+                selected={[sortKey]}
+                onToggle={(nextKey) => {
+                  setSortKey(nextKey);
+                  setPage(1);
+                }}
+              />
+            </FilterPill>
+          }
+          filters={
+            <ResearchYearFilter
+              catalog="papers"
+              value={yearRange}
+              onChange={(value) => {
+                setYearRange(value);
                 setPage(1);
               }}
             />
-          </FilterPill>
-        }
-        filters={
-          <ResearchYearFilter
-            catalog="papers"
-            value={yearRange}
-            onChange={(value) => {
-              setYearRange(value);
-              setPage(1);
-            }}
-          />
-        }
-      >
-        <p role="status" className="text-sm text-accent-200">
-          {loading
-            ? "Loading papers…"
-            : currentError
-              ? "Papers unavailable"
-              : total > 0 && first <= last
-                ? `Showing ${first}–${last} of ${total} paper${total === 1 ? "" : "s"}`
-                : `${total} paper${total === 1 ? "" : "s"}`}
-        </p>
+          }
+        >
+          <p role="status" className="text-sm text-accent-200">
+            {loading
+              ? "Loading papers…"
+              : currentError
+                ? "Papers unavailable"
+                : total > 0 && first <= last
+                  ? `Showing ${first}–${last} of ${total} paper${total === 1 ? "" : "s"}`
+                  : `${total} paper${total === 1 ? "" : "s"}`}
+          </p>
 
-        <div aria-busy={loading}>
-          {loading ? (
-            <CatalogCardsSkeleton />
-          ) : currentError ? (
-            <div
-              role="alert"
-              className="flex flex-col items-center gap-3 py-12 text-center"
-            >
-              <h3 className="text-xl font-semibold text-danger-300">
-                Couldn&apos;t load papers
-              </h3>
-              <p className="max-w-md text-neutral-100">{currentError}</p>
-              <Button
-                intent="accent"
-                variant="outlined"
-                onClick={() => setRetry((attempt) => attempt + 1)}
+          <div aria-busy={loading}>
+            {loading ? (
+              <CatalogCardsSkeleton />
+            ) : currentError ? (
+              <div
+                role="alert"
+                className="flex flex-col items-center gap-3 py-12 text-center"
               >
-                Try again
-              </Button>
-            </div>
-          ) : !data?.data.length ? (
-            <div className="flex flex-col items-center gap-3 py-12 text-center">
-              <SearchX aria-hidden="true" className="size-10 text-accent-300" />
-              <h3 className="text-xl font-semibold text-primary-200">
-                No papers found
-              </h3>
-              <p className="text-neutral-100">
-                Try a different keyword or publication year range.
-              </p>
-              {(search || yearRange) && (
+                <h3 className="text-xl font-semibold text-danger-300">
+                  Couldn&apos;t load papers
+                </h3>
+                <p className="max-w-md text-neutral-100">{currentError}</p>
                 <Button
                   intent="accent"
                   variant="outlined"
-                  onClick={() => {
-                    setSearch("");
-                    setYearRange(null);
-                    setPage(1);
-                  }}
+                  onClick={() => setRetry((attempt) => attempt + 1)}
                 >
-                  Clear filters
+                  Try again
                 </Button>
-              )}
-            </div>
-          ) : (
-            <div className={CATALOG_GRID}>
-              {data.data.map((paper) => {
-                const canFindSimilar = canFindSimilarForPaper(paper);
-                return (
-                  <CatalogCard
-                    key={paper.id}
-                    title={paper.title}
-                    eyebrow={
-                      paper.journalTitle ?? paper.sourceName ?? undefined
-                    }
-                    icon={
-                      <BookOpen
-                        aria-hidden="true"
-                        className="size-8 text-accent-300"
-                      />
-                    }
-                    badge={
-                      paper.publicationYear !== null &&
-                      paper.publicationYear > 0 ? (
-                        <Badge size="md" variant="solid" intent="accent">
-                          {paper.publicationYear}
-                        </Badge>
-                      ) : undefined
-                    }
-                    action={
-                      <div className="@container mt-auto w-full">
-                        <div className="grid grid-cols-1 gap-2 @[15rem]:grid-cols-2">
-                          <Link
-                            href={`/research/papers/${paper.id}`}
-                            aria-label={`Show more about ${paper.title}`}
-                            className={PAPER_CARD_ACTION_CLASSES}
-                          >
-                            Show more
-                          </Link>
-                          {canFindSimilar ? (
-                            <Link
-                              href={`/research/papers/${paper.id}?similar=1`}
-                              aria-label={`Find similar papers to ${paper.title}`}
-                              className={PAPER_CARD_ACTION_CLASSES}
-                            >
-                              <span>Find Similar</span>
-                              <FileSearch
-                                aria-hidden="true"
-                                className="size-4 shrink-0"
-                              />
-                            </Link>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled
-                              aria-label={`Find similar papers to ${paper.title || "this paper"} (unavailable)`}
-                              title="Paper title is required to find similar papers"
-                              className={`${PAPER_CARD_ACTION_CLASSES} opacity-50 pointer-events-none cursor-default`}
-                            >
-                              <span>Find Similar</span>
-                              <FileSearch
-                                aria-hidden="true"
-                                className="size-4 shrink-0"
-                              />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    }
+              </div>
+            ) : !data?.data.length ? (
+              <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <SearchX aria-hidden="true" className="size-10 text-accent-300" />
+                <h3 className="text-xl font-semibold text-primary-200">
+                  No papers found
+                </h3>
+                <p className="text-neutral-100">
+                  Try a different keyword or publication year range.
+                </p>
+                {(search || yearRange) && (
+                  <Button
+                    intent="accent"
+                    variant="outlined"
+                    onClick={() => {
+                      setSearch("");
+                      setYearRange(null);
+                      setPage(1);
+                    }}
                   >
-                    {paper.staff?.name && (
-                      <p className="line-clamp-2 wrap-break-word text-accent-300">
-                        {paper.staff.name}
-                      </p>
-                    )}
-                    {paper.subtitle && (
-                      <p className="line-clamp-2 wrap-break-word text-neutral-200">
-                        {paper.subtitle}
-                      </p>
-                    )}
-                    <CatalogSourceLink
-                      url={paper.url}
-                      label="Read paper"
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className={CATALOG_GRID}>
+                {data.data.map((paper) => {
+                  const canFindSimilar = canFindSimilarForPaper(paper);
+                  return (
+                    <CatalogCard
+                      key={paper.id}
                       title={paper.title}
-                    />
-                  </CatalogCard>
-                );
-              })}
-            </div>
+                      eyebrow={
+                        paper.journalTitle ?? paper.sourceName ?? undefined
+                      }
+                      icon={
+                        <BookOpen
+                          aria-hidden="true"
+                          className="size-8 text-accent-300"
+                        />
+                      }
+                      badge={
+                        paper.publicationYear !== null &&
+                        paper.publicationYear > 0 ? (
+                          <Badge size="md" variant="solid" intent="accent">
+                            {paper.publicationYear}
+                          </Badge>
+                        ) : undefined
+                      }
+                      action={
+                        <div className="@container mt-auto w-full">
+                          <div className="grid grid-cols-1 gap-2 @[15rem]:grid-cols-2">
+                            <Link
+                              href={`/research?tab=papers&paper=${paper.id}`}
+                              aria-label={`Show more about ${paper.title}`}
+                              className={PAPER_CARD_ACTION_CLASSES}
+                              onClick={(event) => {
+                                if (
+                                  !event.metaKey &&
+                                  !event.ctrlKey &&
+                                  !event.shiftKey &&
+                                  !event.altKey &&
+                                  event.button === 0
+                                ) {
+                                  event.preventDefault();
+                                  navigate(paper.id);
+                                }
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === " ") {
+                                  event.preventDefault();
+                                  navigate(paper.id);
+                                }
+                              }}
+                            >
+                              Show more
+                            </Link>
+                            {canFindSimilar ? (
+                              <Link
+                                href={`/research?tab=papers&paper=${paper.id}&similar=1`}
+                                aria-label={`Find similar papers to ${paper.title}`}
+                                className={PAPER_CARD_ACTION_CLASSES}
+                                onClick={(event) => {
+                                  if (
+                                    !event.metaKey &&
+                                    !event.ctrlKey &&
+                                    !event.shiftKey &&
+                                    !event.altKey &&
+                                    event.button === 0
+                                  ) {
+                                    event.preventDefault();
+                                    navigate(paper.id, { similar: true });
+                                  }
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === " ") {
+                                    event.preventDefault();
+                                    navigate(paper.id, { similar: true });
+                                  }
+                                }}
+                              >
+                                <span>Find Similar</span>
+                                <FileSearch
+                                  aria-hidden="true"
+                                  className="size-4 shrink-0"
+                                />
+                              </Link>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                aria-label={`Find similar papers to ${paper.title || "this paper"} (unavailable)`}
+                                title="Paper title is required to find similar papers"
+                                className={`${PAPER_CARD_ACTION_CLASSES} opacity-50 pointer-events-none cursor-default`}
+                              >
+                                <span>Find Similar</span>
+                                <FileSearch
+                                  aria-hidden="true"
+                                  className="size-4 shrink-0"
+                                />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      }
+                    >
+                      {paper.staff?.name && (
+                        <p className="line-clamp-2 wrap-break-word text-accent-300">
+                          {paper.staff.name}
+                        </p>
+                      )}
+                      {paper.subtitle && (
+                        <p className="line-clamp-2 wrap-break-word text-neutral-200">
+                          {paper.subtitle}
+                        </p>
+                      )}
+                      <CatalogSourceLink
+                        url={paper.url}
+                        label="Read paper"
+                        title={paper.title}
+                      />
+                    </CatalogCard>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {!loading && data && (
+            <CatalogPagination
+              label="Papers pagination"
+              page={data.pagination.page}
+              totalPages={data.pagination.totalPages}
+              onPageChange={setPage}
+            />
           )}
-        </div>
+        </CatalogLayout>
 
-        {!loading && data && (
-          <CatalogPagination
-            label="Papers pagination"
-            page={data.pagination.page}
-            totalPages={data.pagination.totalPages}
-            onPageChange={setPage}
-          />
-        )}
-      </CatalogLayout>
-
-      <PapersExploreSection suggestedQuery={term} />
-    </div>
+        <PapersExploreSection suggestedQuery={term} />
+      </div>
+    </ResearchCatalogSwap>
   );
 }

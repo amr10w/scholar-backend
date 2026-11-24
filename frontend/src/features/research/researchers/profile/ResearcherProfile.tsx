@@ -1,7 +1,10 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
-import Button from "@/src/components/ui/Button/Button";
+import { Loader2 } from "lucide-react";
+import {
+  ResearchDetailShell,
+  ResearchDetailState,
+} from "../../ResearchDetailShell";
 import ProfileHeader from "./ProfileHeader";
 import { ProfileStats, ProfileStatsSkeleton } from "./ProfileStats";
 import ProfileTabs, { type ProfileTabId } from "./ProfileTabs";
@@ -61,47 +64,14 @@ const ResearcherProfile = ({ id, initialResearcher, onBack }: ResearcherProfileP
   const profile = scholar.status === "ready" ? scholar.profile : null;
 
   return (
-    <div className="flex flex-col gap-8">
-      <button
-        type="button"
-        onClick={onBack}
-        className="self-start inline-flex items-center gap-2 rounded-full border border-neutral-500 bg-overlay/5 px-4 py-1.5 text-sm text-neutral-100 transition-colors duration-200 hover:border-primary-300 hover:text-primary-200 cursor-pointer"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Back to list
-      </button>
-
-      {researcher.status === "loading" && (
-        <div className="flex items-center justify-center gap-2 py-24 text-neutral-200" role="status">
-          <Loader2 className="size-5 animate-spin text-accent-300" aria-hidden="true" />
-          Loading researcher…
-        </div>
-      )}
-
-      {researcher.status === "not_found" && (
-        <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-          <h2 className="text-2xl font-semibold text-accent-300">Researcher not found</h2>
-          <p className="max-w-md text-neutral-100">
-            We couldn&apos;t find a researcher matching this ID.
-          </p>
-        </div>
-      )}
-
-      {researcher.status === "error" && (
-        <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-          <h2 className="text-2xl font-semibold text-danger-300">Researcher unavailable</h2>
-          <p className="max-w-md text-neutral-100">{researcher.message}</p>
-          <Button
-            type="button"
-            variant="outlined"
-            intent="accent"
-            size="md"
-            onClick={retry}
-          >
-            Try again
-          </Button>
-        </div>
-      )}
+    <ResearchDetailShell onBack={onBack} backParam="researcher">
+      <ResearchDetailState
+        label="Researcher"
+        loading={researcher.status === "loading"}
+        notFound={researcher.status === "not_found"}
+        error={researcher.status === "error" ? researcher.message : undefined}
+        onRetry={retry}
+      />
 
       {researcher.status === "ready" && (
         <>
@@ -122,7 +92,7 @@ const ResearcherProfile = ({ id, initialResearcher, onBack }: ResearcherProfileP
           />
         </>
       )}
-    </div>
+    </ResearchDetailShell>
   );
 };
 

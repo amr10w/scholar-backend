@@ -2,8 +2,6 @@
 
 import { ExternalLink } from "lucide-react";
 import {
-  CatalogDetailsLayout,
-  CatalogDetailState,
   DetailFields,
   DetailSection,
   safeExternalUrl,
@@ -11,6 +9,10 @@ import {
 import Badge from "@/src/components/ui/Badge/Badge";
 import getButtonClasses from "@/src/components/ui/Button/button.style";
 import { useCatalogDetail } from "@/src/hooks/useCatalogDetail";
+import {
+  ResearchDetailShell,
+  ResearchDetailState,
+} from "../ResearchDetailShell";
 import { hasValue, toProjectSummary } from "./project.utils";
 import type { GraduationProject } from "./project.type";
 
@@ -121,21 +123,31 @@ function ProjectDetailContent({ project }: { project: GraduationProject }) {
   );
 }
 
-export default function ProjectDetails({ id }: { id: string }) {
+export default function ProjectDetails({
+  id,
+  initialProject,
+  onBack,
+}: {
+  id: string;
+  /** Row already loaded by the list, so details render without a spinner */
+  initialProject?: GraduationProject;
+  onBack?: () => void;
+}) {
   const {
     data: project,
     loading,
     notFound,
     error,
     reload,
-  } = useCatalogDetail<GraduationProject>(id, "/projects/catalog");
+  } = useCatalogDetail<GraduationProject>(
+    id,
+    "/projects/catalog",
+    initialProject,
+  );
 
   return (
-    <CatalogDetailsLayout
-      backHref="/research?tab=projects"
-      backLabel="Back to projects"
-    >
-      <CatalogDetailState
+    <ResearchDetailShell onBack={onBack} backParam="project">
+      <ResearchDetailState
         label="Project"
         loading={loading}
         notFound={notFound}
@@ -143,6 +155,6 @@ export default function ProjectDetails({ id }: { id: string }) {
         onRetry={reload}
       />
       {project && <ProjectDetailContent project={project} />}
-    </CatalogDetailsLayout>
+    </ResearchDetailShell>
   );
 }

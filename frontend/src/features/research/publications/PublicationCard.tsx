@@ -20,8 +20,10 @@ import {
 
 export default function PublicationCard({
   publication,
+  onViewDetails,
 }: {
   publication: Publication;
+  onViewDetails?: (id: number) => void;
 }) {
   const metric = latestMetric(publication);
   const editorial = editorialStat(publication);
@@ -52,7 +54,10 @@ export default function PublicationCard({
       ]
         .filter(Boolean)
         .join(" · ")}
-      href={`/research/publications/${publication.id}`}
+      href={`/research?tab=publications&publication=${publication.id}`}
+      onActionClick={
+        onViewDetails ? () => onViewDetails(publication.id) : undefined
+      }
       icon={<BookOpen aria-hidden="true" className="size-8 text-accent-300" />}
       badge={
         metric?.quartile ? (

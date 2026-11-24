@@ -15,6 +15,7 @@ interface CatalogCardProps {
   icon?: ReactNode;
   badge?: ReactNode;
   href?: string;
+  onActionClick?: () => void;
   action?: ReactNode;
   children: ReactNode;
 }
@@ -26,6 +27,7 @@ export default function CatalogCard({
   icon,
   badge,
   href,
+  onActionClick,
   action,
   children,
 }: CatalogCardProps) {
@@ -50,6 +52,25 @@ export default function CatalogCard({
             href={href}
             aria-label={`Show more about ${title}`}
             className={catalogActionClasses}
+            onClick={(event) => {
+              if (
+                onActionClick &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                !event.shiftKey &&
+                !event.altKey &&
+                event.button === 0
+              ) {
+                event.preventDefault();
+                onActionClick();
+              }
+            }}
+            onKeyDown={(event) => {
+              if (onActionClick && event.key === " ") {
+                event.preventDefault();
+                onActionClick();
+              }
+            }}
           >
             Show more
           </Link>

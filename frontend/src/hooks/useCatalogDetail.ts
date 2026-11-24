@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type ApiResponse } from "@/src/lib/api-client";
 
-export function useCatalogDetail<T>(id: string, path: string) {
+/**
+ * Loads one catalog record by id. When `initialData` (e.g. the row already
+ * shown in the list) is given, it renders immediately and the fresh record
+ * replaces it once loaded, so opening details never flashes a spinner.
+ */
+export function useCatalogDetail<T>(id: string, path: string, initialData?: T) {
   const [retry, setRetry] = useState(0);
   const key = `${path}/${id}:${retry}`;
   const invalidId =
@@ -38,11 +43,15 @@ export function useCatalogDetail<T>(id: string, path: string) {
     return () => controller.abort();
   }, [id, path, key, invalidId]);
 
+  const fetched = result?.key === key ? result : undefined;
+  const notFound = invalidId || !!fetched?.notFound;
+  const data = notFound ? undefined : (fetched?.data ?? initialData);
+
   return {
-    data: result?.key === key ? result.data : undefined,
-    loading: !invalidId && result?.key !== key,
-    error: result?.key === key ? result.error : undefined,
-    notFound: invalidId || (result?.key === key && !!result.notFound),
+    data,
+    loading: !invalidId && !fetched && !initialData,
+    error: data ? undefined : fetched?.error,
+    notFound,
     reload: () => setRetry((value) => value + 1),
   };
 }

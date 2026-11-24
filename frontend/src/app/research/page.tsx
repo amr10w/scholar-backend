@@ -12,7 +12,15 @@ export default async function ResearchPage(
   const activeTab: TabType =
     tab === "papers" || tab === "publications" || tab === "projects"
       ? tab
-      : "researchers";
+      : tab === "researchers"
+        ? "researchers"
+        : searchParams?.paper
+          ? "papers"
+          : searchParams?.publication
+            ? "publications"
+            : searchParams?.project
+              ? "projects"
+              : "researchers";
 
   return (
     <CatalogPage

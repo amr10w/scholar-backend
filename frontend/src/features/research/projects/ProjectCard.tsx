@@ -9,7 +9,13 @@ const SECTION_LABEL =
   "flex items-center gap-1.5 text-sm font-semibold text-neutral-50";
 const SECTION_ICON = "size-4 shrink-0 text-accent-300";
 
-const ProjectCard = ({ project }: { project: ProjectSummary }) => {
+const ProjectCard = ({
+  project,
+  onViewDetails,
+}: {
+  project: ProjectSummary;
+  onViewDetails?: (id: number) => void;
+}) => {
   const {
     id,
     title,
@@ -35,7 +41,8 @@ const ProjectCard = ({ project }: { project: ProjectSummary }) => {
           </Badge>
         )
       }
-      href={`/research/projects/${id}`}
+      href={`/research?tab=projects&project=${id}`}
+      onActionClick={onViewDetails ? () => onViewDetails(id) : undefined}
     >
       {fields.length > 0 && (
         <ul aria-label="Project fields" className="flex flex-wrap gap-2">

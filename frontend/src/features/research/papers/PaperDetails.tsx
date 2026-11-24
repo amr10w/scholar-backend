@@ -5,14 +5,16 @@ import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { ExternalLink, FileSearch, Loader2 } from "lucide-react";
 import {
-  CatalogDetailsLayout,
-  CatalogDetailState,
   DetailFields,
   DetailSection,
   safeExternalUrl,
 } from "@/src/components/catalog/CatalogDetails";
 import getButtonClasses from "@/src/components/ui/Button/button.style";
 import { useCatalogDetail } from "@/src/hooks/useCatalogDetail";
+import {
+  ResearchDetailShell,
+  ResearchDetailState,
+} from "../ResearchDetailShell";
 import {
   ExploreApiError,
   canFindSimilarForPaper,
@@ -30,9 +32,18 @@ import SimilarPapersSection, {
 
 const ACTION_BUTTON_CLASSES = `${getButtonClasses({ intent: "accent", variant: "outlined", size: "md" })} min-h-11 w-fit gap-2 whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-200`;
 
-export default function PaperDetails({ id }: { id: string }) {
+export default function PaperDetails({
+  id,
+  initialPaper,
+  onBack,
+}: {
+  id: string;
+  /** Row already loaded by the list, so details render without a spinner */
+  initialPaper?: ResearchPaper;
+  onBack?: () => void;
+}) {
   const searchParams = useSearchParams();
-  const autoTriggerSimilar = searchParams.get("similar") === "1";
+  const autoTriggerSimilar = searchParams?.get("similar") === "1";
 
   const {
     data: rawPaper,
@@ -40,7 +51,7 @@ export default function PaperDetails({ id }: { id: string }) {
     notFound,
     error,
     reload,
-  } = useCatalogDetail<ResearchPaper>(id, "/papers");
+  } = useCatalogDetail<ResearchPaper>(id, "/papers", initialPaper);
 
   const paper = rawPaper ? normalizePaper(rawPaper) : undefined;
   const directUrl = safeExternalUrl(paper?.url);
@@ -276,11 +287,8 @@ export default function PaperDetails({ id }: { id: string }) {
     : [];
 
   return (
-    <CatalogDetailsLayout
-      backHref="/research?tab=papers"
-      backLabel="Back to papers"
-    >
-      <CatalogDetailState
+    <ResearchDetailShell onBack={onBack} backParam="paper">
+      <ResearchDetailState
         label="Paper"
         loading={loading}
         notFound={notFound}
@@ -358,7 +366,7 @@ export default function PaperDetails({ id }: { id: string }) {
 
           {paper.subtitle && (
             <DetailSection title="Summary">
-              <p className="whitespace-pre-wrap wrap-break-word text-neutral-100">
+              <p className="max-w-4xl whitespace-pre-wrap wrap-break-word leading-relaxed text-neutral-100">
                 {paper.subtitle}
               </p>
             </DetailSection>
@@ -371,6 +379,6 @@ export default function PaperDetails({ id }: { id: string }) {
           )}
         </article>
       )}
-    </CatalogDetailsLayout>
+    </ResearchDetailShell>
   );
 }

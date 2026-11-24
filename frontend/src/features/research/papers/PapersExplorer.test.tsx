@@ -182,12 +182,12 @@ describe("PapersExplorer (list, search, sort, year filter, and link safety)", ()
       screen.getByRole("link", {
         name: "Show more about Mock Paper: Baseline Reference Architecture for Open Silicon Flows",
       }),
-    ).toHaveAttribute("href", "/research/papers/1");
+    ).toHaveAttribute("href", "/research?tab=papers&paper=1");
     expect(
       screen.getByRole("link", {
         name: "Find similar papers to Mock Paper: Baseline Reference Architecture for Open Silicon Flows",
       }),
-    ).toHaveAttribute("href", "/research/papers/1?similar=1");
+    ).toHaveAttribute("href", "/research?tab=papers&paper=1&similar=1");
 
     // "Read paper" is omitted when paper has no URL (DOI-only) or unsafe URL
     expect(
@@ -466,8 +466,14 @@ describe("PaperDetails (/research/papers/[id])", () => {
       reload,
     });
     rerender(<PaperDetails id="1" />);
+    expect(
+      screen.getByRole("heading", { name: "Paper unavailable" }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(reload).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "Back to list" }),
+    ).toBeInTheDocument();
   });
 
   it("fetches similar papers on Find Similar click, toggles collapse/expand from cache, and handles ?similar=1 + 429 rate limits", async () => {

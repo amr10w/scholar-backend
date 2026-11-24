@@ -65,7 +65,9 @@ const ResearchContainer = ({ activeTab }: { activeTab: TabType }) => {
           <ProjectsPanel />
         </Suspense>
       ) : (
-        <PapersExplorer />
+        <Suspense fallback={<ResearchListSkeleton tab="papers" />}>
+          <PapersExplorer />
+        </Suspense>
       )}
     </div>
   );
