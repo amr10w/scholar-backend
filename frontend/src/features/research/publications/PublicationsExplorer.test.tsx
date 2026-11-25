@@ -93,7 +93,7 @@ function makePage(
   overrides: Partial<Paginated<Publication>["pagination"]> = {},
 ): Paginated<Publication> {
   const total = overrides.total ?? data.length;
-  const limit = overrides.limit ?? 10;
+  const limit = overrides.limit ?? 12;
   return {
     success: true,
     data,
@@ -134,7 +134,9 @@ describe("PublicationsExplorer (CatalogLayout theme)", () => {
     );
 
     expect(fetchPublications).not.toHaveBeenCalled();
-    expect(screen.getByRole("status")).toHaveTextContent("200 publications");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Showing 1–12 of 200 publications",
+    );
     expect(screen.getByText(/JAIR · ACM · 1993/)).toBeInTheDocument();
     expect(
       screen.getByRole("link", {

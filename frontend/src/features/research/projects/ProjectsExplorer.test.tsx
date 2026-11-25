@@ -39,7 +39,7 @@ describe("ProjectsExplorer", () => {
     render(<ProjectsExplorer initialPage={makePage(makeProjects(3), 31)} />);
 
     expect(cards()).toHaveLength(3);
-    expect(screen.getByText("Showing").textContent).toContain("31");
+    expect(screen.getByRole("status").textContent).toContain("31");
     expect(fetchProjects).not.toHaveBeenCalled();
   });
 
@@ -78,7 +78,7 @@ describe("ProjectsExplorer", () => {
       sponsorship: "sponsored",
     });
     expect(screen.getByRole("article", { name: "Antenna array" })).toBeInTheDocument();
-    expect(screen.getByText("Showing").textContent).toContain("1");
+    expect(screen.getByRole("status").textContent).toContain("1");
   });
 
   it("debounces the search before calling the API", async () => {
@@ -93,21 +93,21 @@ describe("ProjectsExplorer", () => {
     expect(lastQuery()).toMatchObject({ search: "fpga", page: 1 });
   });
 
-  it("appends the next page with Load More and hides it at the end", async () => {
+  it("navigates pages with numbered pagination and disables Next on the last page", async () => {
     const user = userEvent.setup();
     fetchProjects.mockResolvedValue(makePage(makeProjects(2, 13), 14, 2));
     render(<ProjectsExplorer initialPage={makePage(makeProjects(12), 14)} />);
 
-    await user.click(screen.getByRole("button", { name: "Load More" }));
+    await user.click(screen.getByRole("button", { name: /Next/i }));
 
-    await waitFor(() => expect(cards()).toHaveLength(14));
+    await waitFor(() => expect(cards()).toHaveLength(2));
     expect(lastQuery()).toMatchObject({ page: 2 });
-    expect(screen.getByRole("article", { name: "Project 1" })).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Project 13" })).toBeInTheDocument();
     expect(screen.getByRole("article", { name: "Project 14" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Load More" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Next/i })).toBeDisabled();
   });
 
-  it("returns to page one when a year is cleared after loading more projects", async () => {
+  it("returns to page one when a year is cleared after paging", async () => {
     const user = userEvent.setup();
     fetchResearchYears.mockResolvedValue({ years: [2024, 2026], counts: [] });
     fetchProjects
@@ -115,8 +115,8 @@ describe("ProjectsExplorer", () => {
       .mockResolvedValueOnce(makePage(makeProjects(1, 20), 1))
       .mockResolvedValueOnce(makePage(makeProjects(12), 14));
     render(<ProjectsExplorer initialPage={makePage(makeProjects(12), 14)} />);
-    await user.click(screen.getByRole("button", { name: "Load More" }));
-    await waitFor(() => expect(cards()).toHaveLength(14));
+    await user.click(screen.getByRole("button", { name: /Next/i }));
+    await waitFor(() => expect(cards()).toHaveLength(2));
     await user.click(screen.getByRole("button", { name: "Year" }));
     fireEvent.change(await screen.findByRole("slider", { name: "Project year minimum" }), { target: { value: "1" } });
     await waitFor(() => expect(cards()).toHaveLength(1));

@@ -93,11 +93,19 @@ const PublicationsExplorer = ({ initialPage }: PublicationsExplorerProps) => {
       ? loaded
       : undefined;
   const loading = pending || !current;
-  const publications = current?.data?.data ?? [];
-  const { total, totalPages } = current?.data?.pagination ?? {
-    total: 0,
-    totalPages: 0,
-  };
+  const displayData = current?.data ?? loaded?.data ?? initialPage;
+  const showInitialSkeleton = loading && !displayData;
+  const isRefetching = loading && Boolean(displayData);
+  const currentError = !loading ? current?.error : undefined;
+  const publications = displayData?.data ?? [];
+  const pagination = displayData?.pagination;
+  const total = pagination?.total ?? 0;
+  const totalPages = pagination?.totalPages ?? 0;
+  const first =
+    pagination && total > 0 ? (pagination.page - 1) * pagination.limit + 1 : 0;
+  const last = pagination
+    ? Math.min(pagination.page * pagination.limit, total)
+    : 0;
 
   return (
     <ResearchCatalogSwap
@@ -133,21 +141,23 @@ const PublicationsExplorer = ({ initialPage }: PublicationsExplorerProps) => {
         }
       >
         <p role="status" className="text-sm text-accent-200">
-          {loading
+          {showInitialSkeleton
             ? "Loading publications…"
-            : current.error
+            : currentError
               ? "Publications unavailable"
-              : `${total} publication${total === 1 ? "" : "s"}`}
+              : total > 0 && first <= last
+                ? `Showing ${first}–${last} of ${total} publication${total === 1 ? "" : "s"}`
+                : `${total} publication${total === 1 ? "" : "s"}`}
         </p>
 
-        {loading ? (
-          <CatalogCardsSkeleton />
-        ) : current.error ? (
+        {showInitialSkeleton ? (
+          <CatalogCardsSkeleton count={12} />
+        ) : currentError ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
             <h3 className="text-xl font-semibold text-danger-300">
               Couldn&apos;t load publications
             </h3>
-            <p className="text-neutral-100 max-w-md">{current.error}</p>
+            <p className="text-neutral-100 max-w-md">{currentError}</p>
             <button
               type="button"
               onClick={() => setAttempt((value) => value + 1)}
@@ -183,7 +193,10 @@ const PublicationsExplorer = ({ initialPage }: PublicationsExplorerProps) => {
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-6">
+          <div
+            className={`flex flex-col gap-6 transition-opacity duration-150 ${isRefetching ? "opacity-60" : "opacity-100"}`}
+            aria-busy={loading}
+          >
             <div className={CATALOG_GRID}>
               {publications.map((publication) => (
                 <PublicationCard
@@ -195,10 +208,11 @@ const PublicationsExplorer = ({ initialPage }: PublicationsExplorerProps) => {
             </div>
 
             <CatalogPagination
-              label="Publications pages"
+              label="Publications pagination"
               page={page}
               totalPages={totalPages}
               onPageChange={setPage}
+              disabled={loading}
             />
           </div>
         )}

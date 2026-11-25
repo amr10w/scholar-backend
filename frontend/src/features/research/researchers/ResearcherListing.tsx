@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import CatalogLayout from "@/src/components/catalog/CatalogLayout";
 import { CatalogCardsSkeleton } from "@/src/components/catalog/CatalogCard";
+import CatalogPagination from "@/src/components/catalog/CatalogPagination";
 import Button from "@/src/components/ui/Button/Button";
 import CatalogFacetLoader from "@/src/components/catalog/CatalogFacetLoader";
 import SearchableFacet, {
@@ -21,7 +22,6 @@ import {
 import {
   EMPTY_RESEARCHER_FILTERS,
   hasActiveResearcherFilters,
-  mergeUniqueResearchers,
   researcherFiltersKey,
   toResearcherSummary,
 } from "./researcher.utils";
@@ -40,10 +40,11 @@ const fields = [
 interface ResearcherResults {
   key: string;
   items: AcademicResearcher[];
+  page: number;
+  limit: number;
   total: number;
   totalPages: number;
   error?: string;
-  loadMoreError?: string;
 }
 
 const requestKey = (filterKey: string, page: number, attempt: number) =>
@@ -67,6 +68,8 @@ export function useResearcherListing(
     return {
       key: requestKey(researcherFiltersKey(EMPTY_RESEARCHER_FILTERS), 1, 0),
       items: initialPage?.data ?? [],
+      page: initialPage?.pagination.page ?? 1,
+      limit: initialPage?.pagination.limit ?? RESEARCHERS_PAGE_SIZE,
       total: initialPage?.pagination.total ?? 0,
       totalPages: initialPage?.pagination.totalPages ?? 0,
       error: initialError,
@@ -96,15 +99,14 @@ export function useResearcherListing(
     )
       .then(({ data, pagination }) => {
         if (controller.signal.aborted) return;
-        setResult((previous) => ({
+        setResult({
           key,
-          items:
-            page === 1
-              ? data
-              : mergeUniqueResearchers(previous?.items ?? [], data),
+          items: data,
+          page: pagination.page,
+          limit: pagination.limit,
           total: pagination.total,
           totalPages: pagination.totalPages,
-        }));
+        });
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
@@ -112,11 +114,15 @@ export function useResearcherListing(
           cause instanceof Error && cause.message
             ? cause.message
             : "Could not load researchers.";
-        setResult((previous) =>
-          page > 1 && previous
-            ? { ...previous, key, loadMoreError: message }
-            : { key, items: [], total: 0, totalPages: 0, error: message },
-        );
+        setResult({
+          key,
+          items: [],
+          page,
+          limit: pageSize,
+          total: 0,
+          totalPages: 0,
+          error: message,
+        });
       });
     return () => controller.abort();
   }, [applied, key, page, pageSize, pending, resultKey]);
@@ -133,7 +139,7 @@ export function useResearcherListing(
     result,
     loading,
     update,
-    loadMore: () => setPage((value) => value + 1),
+    setPage,
     retry: () => setAttempt((value) => value + 1),
   };
 }
@@ -145,12 +151,18 @@ export default function ResearcherListing({
   listing: ReturnType<typeof useResearcherListing>;
   onViewProfile: (id: number) => void;
 }) {
-  const { filters, page, result, loading, update, loadMore, retry } = listing;
-  const loadingMore = loading && page > 1;
-  const count = result?.items.length ?? 0;
-  const total = result?.total ?? count;
-  const canLoadMore = !!result && page < result.totalPages && count < total;
+  const { filters, page, result, loading, update, setPage, retry } = listing;
+  const showInitialSkeleton = loading && !result;
+  const isRefetching = loading && Boolean(result);
+  const currentError = !loading ? result?.error : undefined;
+  const total = result?.total ?? 0;
+  const currentPage = result?.page ?? page;
+  const currentLimit = result?.limit ?? RESEARCHERS_PAGE_SIZE;
+  const first = total > 0 ? (currentPage - 1) * currentLimit + 1 : 0;
+  const last =
+    total > 0 ? Math.min(currentPage * currentLimit, total) : 0;
   const activeCount = fields.filter(({ key }) => filters[key].length).length;
+
   return (
     <CatalogLayout
       search={
@@ -199,17 +211,19 @@ export default function ResearcherListing({
       resultsLabel="Researcher results"
     >
       <p role="status" className="text-sm text-accent-200">
-        {loading && page === 1
+        {showInitialSkeleton
           ? "Loading researchers…"
-          : result?.error
+          : currentError
             ? "Researchers unavailable"
-            : `${count} of ${total} researcher${total === 1 ? "" : "s"}`}
+            : total > 0 && first <= last
+              ? `Showing ${first}–${last} of ${total} researcher${total === 1 ? "" : "s"}`
+              : `${total} researcher${total === 1 ? "" : "s"}`}
       </p>
-      {loading && page === 1 ? (
+      {showInitialSkeleton ? (
         <div aria-busy="true" aria-label="Loading researchers">
-          <CatalogCardsSkeleton />
+          <CatalogCardsSkeleton count={12} />
         </div>
-      ) : result?.error ? (
+      ) : currentError ? (
         <div
           role="alert"
           className="flex flex-col items-center gap-3 py-16 text-center"
@@ -217,45 +231,28 @@ export default function ResearcherListing({
           <h3 className="text-xl font-semibold text-danger-300">
             Researchers Are Unavailable
           </h3>
-          <p className="text-neutral-100">{result.error}</p>
+          <p className="text-neutral-100">{currentError}</p>
           <Button variant="outlined" intent="accent" onClick={retry}>
             Try again
           </Button>
         </div>
       ) : result?.items.length ? (
-        <>
+        <div
+          className={`flex flex-col gap-6 transition-opacity duration-150 ${isRefetching ? "opacity-60" : "opacity-100"}`}
+          aria-busy={loading}
+        >
           <ResearcherGrid
             researchers={result.items.map(toResearcherSummary)}
             onViewProfile={onViewProfile}
           />
-          {result.loadMoreError && !loadingMore && (
-            <div
-              role="alert"
-              className="flex flex-col items-center gap-3 text-center"
-            >
-              <p className="text-neutral-100">{result.loadMoreError}</p>
-              <Button variant="outlined" intent="accent" onClick={retry}>
-                Try again
-              </Button>
-            </div>
-          )}
-          {(loadingMore || (canLoadMore && !result.loadMoreError)) && (
-            <Button
-              type="button"
-              variant="outlined"
-              intent="accent"
-              className="self-center"
-              disabled={loadingMore}
-              onClick={loadMore}
-            >
-              {loadingMore ? (
-                <Loader2 className="size-4 animate-spin" aria-label="Loading" />
-              ) : (
-                "Load More"
-              )}
-            </Button>
-          )}
-        </>
+          <CatalogPagination
+            label="Researchers pagination"
+            page={page}
+            totalPages={result.totalPages}
+            onPageChange={setPage}
+            disabled={loading}
+          />
+        </div>
       ) : (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <h3 className="text-2xl font-semibold text-accent-300">

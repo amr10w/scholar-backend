@@ -133,7 +133,7 @@ describe("fetchPublications & fetchPublicationFacets", () => {
       data: {
         success: true,
         data: [RAW_JAIR],
-        pagination: { total: 200, page: 1, limit: 10, totalPages: 20 },
+        pagination: { total: 200, page: 1, limit: 12, totalPages: 17 },
       },
     });
 
@@ -148,7 +148,7 @@ describe("fetchPublications & fetchPublicationFacets", () => {
     expect(get).toHaveBeenCalledWith("/publications", {
       params: {
         page: 1,
-        limit: 10,
+        limit: 12,
         search: "JAIR",
         categoryIds: undefined,
         publicationTypes: undefined,
