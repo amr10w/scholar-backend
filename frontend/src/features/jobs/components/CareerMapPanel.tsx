@@ -500,19 +500,17 @@ export default function CareerMapPanel({
                 onChange={(event) => setDisciplineSearch(event.target.value)}
                 className="w-full rounded-lg border border-neutral-500/70 bg-neutral-800/70 px-2.5 py-1.5 text-xs text-neutral-50 placeholder:text-neutral-300 focus-visible:outline-2 focus-visible:outline-accent-200"
               />
-              <div className="max-h-56 overflow-y-auto">
-                <OptionList<string>
-                  inputType="radio"
-                  options={[
-                    { value: "", label: "All Disciplines" },
-                    ...disciplineOptions.map((d) => ({ value: d, label: d })),
-                  ]}
-                  selected={[filters.disciplines[0] ?? ""]}
-                  onToggle={(val) =>
-                    updateFilter("disciplines", val ? [val] : [])
-                  }
-                />
-              </div>
+              <OptionList<string>
+                inputType="radio"
+                options={[
+                  { value: "", label: "All Disciplines" },
+                  ...disciplineOptions.map((d) => ({ value: d, label: d })),
+                ]}
+                selected={[filters.disciplines[0] ?? ""]}
+                onToggle={(val) =>
+                  updateFilter("disciplines", val ? [val] : [])
+                }
+              />
             </div>
           </FilterPill>
 

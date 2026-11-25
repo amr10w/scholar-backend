@@ -206,20 +206,18 @@ export default function CompaniesPanel({
           <FilterPill
             label={filters.category ? filters.category : "+ Add Category"}
           >
-            <div className="max-h-64 w-64 overflow-y-auto">
-              <OptionList<string>
-                inputType="radio"
-                options={[
-                  { value: "", label: "All Categories" },
-                  ...(facets?.categories ?? []).map((cat) => ({
-                    value: cat,
-                    label: cat,
-                  })),
-                ]}
-                selected={[filters.category]}
-                onToggle={(val) => updateFilter("category", val)}
-              />
-            </div>
+            <OptionList<string>
+              inputType="radio"
+              options={[
+                { value: "", label: "All Categories" },
+                ...(facets?.categories ?? []).map((cat) => ({
+                  value: cat,
+                  label: cat,
+                })),
+              ]}
+              selected={[filters.category]}
+              onToggle={(val) => updateFilter("category", val)}
+            />
           </FilterPill>
 
           <FilterPill

@@ -111,6 +111,9 @@ export function buildCompaniesQuery(filters: CompanyFilters): string {
   for (const country of filters.countries) {
     if (country.trim()) params.append("countries", country.trim());
   }
+  if (filters.countries.length === 1 && filters.countries[0].trim()) {
+    params.set("headquartersCountry", filters.countries[0].trim());
+  }
   return params.toString();
 }
 
@@ -141,6 +144,33 @@ export async function fetchCompanies(
     if (axios.isCancel(cause)) throw cause;
     throw classifyApiError(cause);
   }
+}
+
+function deriveCompanyFacetsFromList(list: CompanySummary[]): CompanyFacets {
+  const countryCounts: Record<string, number> = {};
+  const categorySet = new Set<string>();
+  const sizeSet = new Set<string>();
+
+  for (const company of list) {
+    if (company.industry) categorySet.add(company.industry);
+    if (company.size) sizeSet.add(company.size);
+
+    const locations = new Set<string>();
+    if (company.headquartersCountry) locations.add(company.headquartersCountry);
+    for (const country of company.globalPresence) {
+      if (country) locations.add(country);
+    }
+    for (const country of locations) {
+      countryCounts[country] = (countryCounts[country] ?? 0) + 1;
+    }
+  }
+
+  return {
+    countries: Object.keys(countryCounts).sort((a, b) => a.localeCompare(b)),
+    countryCounts,
+    categories: Array.from(categorySet).sort((a, b) => a.localeCompare(b)),
+    sizes: Array.from(sizeSet).sort((a, b) => a.localeCompare(b)),
+  };
 }
 
 export async function fetchCompanyFacets(
@@ -174,7 +204,19 @@ export async function fetchCompanyFacets(
     return { countries, countryCounts, categories, sizes };
   } catch (cause) {
     if (axios.isCancel(cause)) throw cause;
-    throw classifyApiError(cause);
+    const classified = classifyApiError(cause);
+    // The real backend currently has no GET /api/companies/filters route (it hits /:id with 400 or 404).
+    // Gracefully derive filter options from the companies list instead of failing.
+    if (classified.status === 400 || classified.status === 404) {
+      try {
+        const res = await fetchCompanies("page=1&limit=100", signal);
+        return deriveCompanyFacetsFromList(res.data);
+      } catch (fallbackCause) {
+        if (axios.isCancel(fallbackCause)) throw fallbackCause;
+        throw classifyApiError(fallbackCause);
+      }
+    }
+    throw classified;
   }
 }
 
