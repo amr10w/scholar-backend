@@ -3,6 +3,7 @@ import { api, type ApiResponse } from "@/src/lib/api-client";
 import { safeExternalUrl } from "@/src/components/catalog/CatalogDetails";
 import { COMPANIES_PAGE_SIZE } from "./jobs.constants";
 import { classifyApiError, normalizeJob } from "./jobs.api";
+import { normalizeCountryName } from "./jobs.utils";
 import type {
   CompaniesResponse,
   CompanyDetail,
@@ -10,6 +11,7 @@ import type {
   CompanyFilters,
   CompanyMonthlyStat,
   CompanySummary,
+  Job,
 } from "./jobs.type";
 
 function cleanString(value: unknown): string | null {
@@ -34,8 +36,8 @@ export function normalizeCompanySummary(raw: unknown): CompanySummary {
     ...new Set(
       presenceRaw
         .filter((v): v is string => typeof v === "string")
-        .map((v) => v.trim())
-        .filter(Boolean),
+        .map((v) => normalizeCountryName(v))
+        .filter((v): v is string => Boolean(v)),
     ),
   ];
 
@@ -54,7 +56,9 @@ export function normalizeCompanySummary(raw: unknown): CompanySummary {
     industry: cleanString(obj.industry),
     size: cleanString(obj.size),
     description: cleanString(obj.description),
-    headquartersCountry: cleanString(obj.headquartersCountry ?? obj.hq),
+    headquartersCountry: normalizeCountryName(
+      cleanString(obj.headquartersCountry ?? obj.hq),
+    ),
     globalPresence,
     website: safeExternalUrl(cleanString(obj.website)),
     linkedin: safeExternalUrl(cleanString(obj.linkedin)),
@@ -62,6 +66,63 @@ export function normalizeCompanySummary(raw: unknown): CompanySummary {
     featured: Boolean(obj.featured),
     openJobsCount,
   };
+}
+
+/** Derives a 12-month hiring timeline from job postedAt dates when backend monthlyStats is absent. */
+function deriveMonthlyStatsFromJobs(
+  companyId: number,
+  jobs: Job[],
+): CompanyMonthlyStat[] {
+  const countsByMonth = new Map<string, number>();
+  let latestTimestamp = 0;
+
+  for (const job of jobs) {
+    if (!job.postedAt) continue;
+    const date = new Date(job.postedAt);
+    if (Number.isNaN(date.getTime())) continue;
+    const ts = date.getTime();
+    if (ts > latestTimestamp) latestTimestamp = ts;
+    const ym = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    countsByMonth.set(ym, (countsByMonth.get(ym) ?? 0) + 1);
+  }
+
+  if (countsByMonth.size === 0) return [];
+
+  const now = new Date();
+  const anchor =
+    latestTimestamp > now.getTime() ? new Date(latestTimestamp) : now;
+  const anchorYear = anchor.getUTCFullYear();
+  const anchorMonth = anchor.getUTCMonth();
+
+  const series: CompanyMonthlyStat[] = [];
+  for (let offset = 11; offset >= 0; offset -= 1) {
+    const d = new Date(Date.UTC(anchorYear, anchorMonth - offset, 1));
+    const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    series.push({
+      companyId,
+      yearMonth: ym,
+      jobCount: countsByMonth.get(ym) ?? 0,
+    });
+  }
+
+  // If all jobs are older than the 12-month window ending at `anchor`, anchor on the latest job instead
+  const windowTotal = series.reduce((sum, item) => sum + item.jobCount, 0);
+  if (windowTotal === 0 && latestTimestamp > 0) {
+    const latest = new Date(latestTimestamp);
+    const lYear = latest.getUTCFullYear();
+    const lMonth = latest.getUTCMonth();
+    return Array.from({ length: 12 }, (_, idx) => {
+      const d = new Date(Date.UTC(lYear, lMonth - (11 - idx), 1));
+      const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      return {
+        companyId,
+        yearMonth: ym,
+        jobCount: countsByMonth.get(ym) ?? 0,
+      };
+    });
+  }
+
+  return series;
 }
 
 export function normalizeCompanyDetail(raw: unknown): CompanyDetail {
@@ -74,7 +135,7 @@ export function normalizeCompanyDetail(raw: unknown): CompanyDetail {
   const latestPositions = Array.isArray(obj.latestPositions)
     ? obj.latestPositions.map(normalizeJob)
     : jobs.slice(0, 5);
-  const monthlyStats: CompanyMonthlyStat[] = Array.isArray(obj.monthlyStats)
+  const rawMonthlyStats: CompanyMonthlyStat[] = Array.isArray(obj.monthlyStats)
     ? obj.monthlyStats
         .filter((s): s is Record<string, unknown> => Boolean(s && typeof s === "object"))
         .map((s) => ({
@@ -90,6 +151,10 @@ export function normalizeCompanyDetail(raw: unknown): CompanyDetail {
         }))
         .filter((s) => Boolean(s.yearMonth))
     : [];
+  const monthlyStats =
+    rawMonthlyStats.length > 0
+      ? rawMonthlyStats
+      : deriveMonthlyStatsFromJobs(summary.id, jobs);
 
   return {
     ...summary,

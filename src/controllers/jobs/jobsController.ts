@@ -3,21 +3,114 @@ import asyncHandler from "../../lib/async.handler.js";
 import { catalogFacetValues, readFacetValues } from "../../utils/catalogFacets.js";
 import { db } from "../../db/db_config.js";
 
+const COUNTRY_TO_CANONICAL: Record<string, string> = {
+    eg: "Egypt",
+    egy: "Egypt",
+    egypt: "Egypt",
+    fr: "France",
+    fra: "France",
+    france: "France",
+    de: "Germany",
+    deu: "Germany",
+    germany: "Germany",
+    us: "United States",
+    usa: "United States",
+    "united states": "United States",
+    "united states of america": "United States",
+    uk: "United Kingdom",
+    gb: "United Kingdom",
+    gbr: "United Kingdom",
+    "united kingdom": "United Kingdom",
+    sa: "Saudi Arabia",
+    ksa: "Saudi Arabia",
+    "saudi arabia": "Saudi Arabia",
+    ae: "United Arab Emirates",
+    uae: "United Arab Emirates",
+    "united arab emirates": "United Arab Emirates",
+    ca: "Canada",
+    canada: "Canada",
+    it: "Italy",
+    italy: "Italy",
+    nl: "Netherlands",
+    netherlands: "Netherlands",
+    tr: "Turkey",
+    turkey: "Turkey",
+    in: "India",
+    india: "India",
+    jp: "Japan",
+    japan: "Japan",
+    remote: "Remote",
+};
+
+const CANONICAL_TO_ALIASES: Record<string, string[]> = {
+    Egypt: ["Egypt", "EG", "EGY"],
+    France: ["France", "FR", "FRA"],
+    Germany: ["Germany", "DE", "DEU"],
+    "United States": ["United States", "US", "USA", "United States of America"],
+    "United Kingdom": ["United Kingdom", "UK", "GB", "GBR"],
+    "Saudi Arabia": ["Saudi Arabia", "SA", "KSA"],
+    "United Arab Emirates": ["United Arab Emirates", "AE", "UAE"],
+    Canada: ["Canada", "CA"],
+    Italy: ["Italy", "IT"],
+    Netherlands: ["Netherlands", "NL"],
+    Turkey: ["Turkey", "TR"],
+    India: ["India", "IN"],
+    Japan: ["Japan", "JP"],
+    Remote: ["Remote"],
+};
+
+function canonicalCountry(raw: string | null | undefined): string | null {
+    const trimmed = (raw ?? "").trim();
+    if (!trimmed) return null;
+    return COUNTRY_TO_CANONICAL[trimmed.toLowerCase()] ?? trimmed;
+}
+
+function expandCountryAliases(values: string[]): string[] {
+    const expanded = new Set<string>();
+    for (const value of values) {
+        const canonical = canonicalCountry(value);
+        if (!canonical) continue;
+        expanded.add(value.trim());
+        expanded.add(canonical);
+        for (const alias of CANONICAL_TO_ALIASES[canonical] ?? []) {
+            expanded.add(alias);
+        }
+    }
+    return [...expanded];
+}
+
 export const getJobFacets: RequestHandler = asyncHandler(async (_req, res) => {
-    const [countries, disciplines, companies] = await Promise.all([
-        db.companyBranch.groupBy({ by: ["country"], where: { jobs: { some: {} } } }),
+    const [jobsWithBranch, disciplines, companies, sources] = await Promise.all([
+        db.job.findMany({
+            select: {
+                branch: { select: { country: true } },
+            },
+        }),
         db.job.groupBy({ by: ["industry"] }),
         db.company.findMany({
             where: { jobs: { some: {} } },
             select: { id: true, name: true },
             orderBy: [{ name: "asc" }, { id: "asc" }],
         }),
+        db.job.groupBy({ by: ["source"] }),
     ]);
 
+    const countryCounts: Record<string, number> = {};
+    for (const row of jobsWithBranch) {
+        const name = canonicalCountry(row.branch?.country);
+        if (name) {
+            countryCounts[name] = (countryCounts[name] ?? 0) + 1;
+        }
+    }
+    const countries = Object.keys(countryCounts).sort((a, b) => a.localeCompare(b));
+    const sourceValues = catalogFacetValues(sources.map(row => row.source));
+
     res.json({ success: true, data: {
-        countries: catalogFacetValues(countries.map(row => row.country)),
+        countries,
+        countryCounts,
         disciplines: catalogFacetValues(disciplines.map(row => row.industry)),
         companies,
+        sources: sourceValues.length > 0 ? sourceValues : ["linkedin", "wuzzuf"],
     } });
 });
 
@@ -32,6 +125,7 @@ export const getJobsController = async (req, res) => {
             country,
             discipline,
             company,
+            source,
             type,
             seniority,
         } = req.query;
@@ -94,6 +188,13 @@ export const getJobsController = async (req, res) => {
                 },
             }),
 
+            ...(source && {
+                source: {
+                    equals: String(source).trim(),
+                    mode: "insensitive" as const,
+                },
+            }),
+
             ...(type && {
                 type: type as any,
             }),
@@ -125,7 +226,7 @@ export const getJobsController = async (req, res) => {
                 ],
             }),
 
-            ...(countries.length ? { branch: { country: { in: countries, mode: "insensitive" } } } : country && {
+            ...(countries.length ? { branch: { country: { in: expandCountryAliases(countries), mode: "insensitive" } } } : country && {
                 branch: {
                     country: {
                         contains: country as string,

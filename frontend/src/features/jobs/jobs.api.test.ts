@@ -33,7 +33,12 @@ import {
   normalizeCompanyDetail,
 } from "./companies.api";
 import { EMPTY_COMPANY_FILTERS, EMPTY_FILTERS } from "./jobs.constants";
-import { applyCtaLabel, postedDate } from "./jobs.utils";
+import {
+  applyCtaLabel,
+  companyInitials,
+  normalizeCountryName,
+  postedDate,
+} from "./jobs.utils";
 
 beforeEach(() => {
   get.mockReset();
@@ -110,13 +115,35 @@ describe("jobs & companies data layer", () => {
       name: "Unsafe Corp",
       website: "javascript:alert(1)",
       linkedin: "https://www.linkedin.com/company/safe",
-      globalPresence: ["Egypt", "Egypt", "Germany"],
+      globalPresence: ["EG", "Egypt", "FR", "DE"],
       monthlyStats: [{ year_month: "2026-11", job_count: 3 }],
     });
     expect(comp.website).toBeNull();
     expect(comp.linkedin).toBe("https://www.linkedin.com/company/safe");
-    expect(comp.globalPresence).toEqual(["Egypt", "Germany"]);
+    expect(comp.globalPresence).toEqual(["Egypt", "France", "Germany"]);
     expect(comp.monthlyStats).toEqual([{ companyId: 20, yearMonth: "2026-11", jobCount: 3 }]);
+
+    // Country normalization & company initials without punctuation
+    expect(normalizeCountryName("EG")).toBe("Egypt");
+    expect(normalizeCountryName("FR")).toBe("France");
+    expect(normalizeCountryName("US")).toBe("United States");
+    expect(companyInitials("STMicroelectronics (ST)")).toBe("ST");
+
+    // Derives 12-month hiring timeline from jobs[].postedAt when monthlyStats is absent
+    const compDerived = normalizeCompanyDetail({
+      id: 1,
+      name: "STMicroelectronics (ST)",
+      branches: [{ country: "EG" }, { country: "FR" }],
+      jobs: [
+        { id: 10, title: "Job 1", postedAt: "2026-09-29T00:00:00.000Z" },
+        { id: 11, title: "Job 2", postedAt: "2026-09-15T00:00:00.000Z" },
+      ],
+    });
+    expect(compDerived.globalPresence).toEqual(["Egypt", "France"]);
+    expect(compDerived.monthlyStats).toHaveLength(12);
+    expect(
+      compDerived.monthlyStats.find((m) => m.yearMonth === "2026-09")?.jobCount,
+    ).toBe(2);
   });
 
   it("classifies every API error kind and swallows recordJobVisit errors silently", async () => {

@@ -37,6 +37,8 @@ class Job:
     tags: list = field(default_factory=list)
     is_remote: bool = False
     original_source: str = ""  # for aggregators like JSearch
+    is_taken: bool = False
+    number_visited: int = 0
 
     @property
     def unique_id(self) -> str:
@@ -102,9 +104,26 @@ def _is_remote(job: Job) -> bool:
     return any(p in combined for p in config.REMOTE_PATTERNS)
 
 
+def _is_in_uae(location: str) -> bool:
+    """Check if location indicates the United Arab Emirates."""
+    loc = location.lower().strip()
+    return any(p in loc for p in config.UAE_PATTERNS)
+
+
+def _is_in_usa(location: str) -> bool:
+    """Check if location indicates the United States."""
+    loc = f" {location.lower().strip()} "
+    return any(p in loc for p in config.USA_PATTERNS)
+
+
 def _is_in_allowed_country(location: str) -> bool:
-    """Check if location is in Egypt or Saudi Arabia."""
-    return _is_in_egypt(location) or _is_in_saudi(location)
+    """Check if location is in Egypt, Saudi Arabia, UAE, or USA."""
+    return (
+        _is_in_egypt(location)
+        or _is_in_saudi(location)
+        or _is_in_uae(location)
+        or _is_in_usa(location)
+    )
 
 
 def is_programming_job(job: Job) -> bool:

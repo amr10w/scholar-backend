@@ -63,8 +63,28 @@ class StoredJob:
         )
 
 
+def _load_dotenv_fallback() -> None:
+    """Load root .env file if POSTGRES_URL/DATABASE_URL are not set in the shell."""
+    env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+    if not os.path.isfile(env_path):
+        return
+    with open(env_path, encoding="utf-8") as fh:
+        for raw_line in fh:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key in ("DATABASE_URL", "POSTGRES_URL") and val and not os.environ.get(key):
+                os.environ[key] = val
+
+
 def get_postgres_url() -> str:
     url = os.environ.get("POSTGRES_URL") or os.environ.get("DATABASE_URL")
+    if not url:
+        _load_dotenv_fallback()
+        url = os.environ.get("POSTGRES_URL") or os.environ.get("DATABASE_URL")
     if not url:
         raise ValueError(
             "DATABASE_URL / POSTGRES_URL environment variable is missing! "
@@ -208,15 +228,162 @@ def job_content_hash(job: Job) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+_COUNTRY_CODE_MAP = {
+    "eg": "Egypt",
+    "egy": "Egypt",
+    "sa": "Saudi Arabia",
+    "ksa": "Saudi Arabia",
+    "ae": "United Arab Emirates",
+    "uae": "United Arab Emirates",
+    "us": "United States",
+    "usa": "United States",
+    "uk": "United Kingdom",
+    "gb": "United Kingdom",
+    "de": "Germany",
+    "fr": "France",
+    "it": "Italy",
+    "es": "Spain",
+    "nl": "Netherlands",
+    "ca": "Canada",
+    "tr": "Turkey",
+    "in": "India",
+    "jp": "Japan",
+    "cn": "China",
+    "tw": "Taiwan",
+    "sg": "Singapore",
+    "ch": "Switzerland",
+    "se": "Sweden",
+    "pl": "Poland",
+    "ie": "Ireland",
+    "au": "Australia",
+    "jo": "Jordan",
+    "qa": "Qatar",
+    "kw": "Kuwait",
+}
+
+
+def extract_country(location: str, is_remote: bool = False) -> str:
+    """Derive a canonical full country name (e.g. 'Egypt', 'United States', 'Remote')."""
+    raw = (location or "").strip()
+    lower = raw.lower()
+    padded = f" {lower} "
+
+    if lower in _COUNTRY_CODE_MAP:
+        return _COUNTRY_CODE_MAP[lower]
+
+    if any(p in lower for p in ("egypt", "مصر", "cairo", "alexandria", "giza", "smart village", "new cairo", "maadi", "mansoura", "tanta", "assiut", "aswan", "zagazig")):
+        return "Egypt"
+    if any(p in lower for p in ("saudi", "ksa", "السعودية", "riyadh", "jeddah", "dammam", "khobar", "neom")):
+        return "Saudi Arabia"
+    if any(p in lower for p in ("united arab emirates", "uae", "الإمارات", "dubai", "abu dhabi", "sharjah")):
+        return "United Arab Emirates"
+    if any(p in padded for p in (" united states", " usa ", " us ", " us,", " new york", " california", " texas", " seattle", " san francisco", " boston", " austin", " chicago")):
+        return "United States"
+    if any(p in lower for p in ("germany", "munich", "berlin", "frankfurt", "hamburg")):
+        return "Germany"
+    if any(p in lower for p in ("united kingdom", "london", "manchester", "cambridge", " uk")):
+        return "United Kingdom"
+    if any(p in lower for p in ("france", "paris", "lyon", "grenoble")):
+        return "France"
+    if any(p in lower for p in ("italy", "milan", "rome", "turin")):
+        return "Italy"
+    if any(p in lower for p in ("canada", "toronto", "vancouver", "montreal", "ottawa")):
+        return "Canada"
+    if any(p in lower for p in ("netherlands", "amsterdam", "eindhoven")):
+        return "Netherlands"
+
+    # Fallback: check last comma-separated segment against ISO codes
+    if "," in raw:
+        last_part = raw.split(",")[-1].strip()
+        mapped = _COUNTRY_CODE_MAP.get(last_part.lower())
+        if mapped:
+            return mapped
+        if last_part:
+            return last_part
+
+    if is_remote or any(p in lower for p in ("remote", "anywhere", "worldwide", "work from home")):
+        return "Remote"
+    return raw or "Remote"
+
+
+def extract_city(location: str, country: str) -> str:
+    """Extract city portion from a location string (e.g. 'Cairo, Egypt' -> 'Cairo')."""
+    raw = (location or "").strip()
+    if not raw:
+        return ""
+    if "," in raw:
+        first = raw.split(",")[0].strip()
+        return first
+    if raw.lower() == country.lower():
+        return ""
+    return raw
+
+
+def normalize_job_type(job_type: str, title: str = "") -> Optional[str]:
+    """Map scraped job_type text to Prisma JobType enum: fullTime | partTime | internship."""
+    combined = f"{job_type or ''} {title or ''}".lower()
+    if any(k in combined for k in ("intern", "تدريب")):
+        return "internship"
+    if any(k in combined for k in ("part-time", "part time", "دوام جزئي")):
+        return "partTime"
+    if any(k in combined for k in ("full-time", "full time", "دوام كامل")):
+        return "fullTime"
+    return None
+
+
+def infer_seniority(title: str) -> Optional[str]:
+    """Map job title keywords to Prisma SeniorityLevel enum: junior | mid | senior | lead."""
+    t = f" {(title or '').lower()} "
+    if any(k in t for k in (" lead ", " principal ", " staff ", " architect ", " manager ", " head ", " director ")):
+        return "lead"
+    if any(k in t for k in (" senior ", " sr.", " sr ")):
+        return "senior"
+    if any(k in t for k in (" junior ", " jr.", " jr ", " entry ", " fresh ", " graduate ", " intern ", " internship ")):
+        return "junior"
+    if any(k in t for k in (" mid ", " mid-level ", " intermediate ")):
+        return "mid"
+    return None
+
+
+def infer_industry(title: str, tags: list) -> str:
+    """Derive a clean discipline/industry label matching frontend filters."""
+    text = f"{title or ''} {' '.join(str(x) for x in (tags or []))}".lower()
+    if any(k in text for k in ("vlsi", "rtl", "asic", "fpga", "physical design", "silicon", "dft", "verification", "analog", "ic design", "eda")):
+        return "VLSI & Hardware"
+    if any(k in text for k in ("embedded", "firmware", "autosar", "rtos", "microcontroller", "automotive", "iot")):
+        return "Embedded Systems"
+    if any(k in text for k in ("machine learning", "deep learning", "artificial intelligence", " ai ", "nlp", "computer vision", "llm", "mlops")):
+        return "AI & Machine Learning"
+    if any(k in text for k in ("devops", "cloud", "kubernetes", "docker", "sre", "terraform", "aws", "azure", "gcp")):
+        return "Cloud & DevOps"
+    if any(k in text for k in ("data scientist", "data engineer", "data analyst", "analytics", "bi ", "etl")):
+        return "Data Engineering"
+    if any(k in text for k in ("security", "cybersecurity", "soc ", "pentest", "infosec")):
+        return "Cybersecurity"
+    if any(k in text for k in ("qa", "quality assurance", "test engineer", "sdet", "automation test")):
+        return "QA & Testing"
+    if any(k in text for k in ("android", "ios", "flutter", "react native", "mobile")):
+        return "Mobile Development"
+    if any(k in text for k in ("frontend", "front-end", "front end", "react", "next.js", "angular", "vue")):
+        return "Frontend Development"
+    if any(k in text for k in ("backend", "back-end", "back end", "node", "django", "spring", "fastapi", "laravel", ".net", "golang")):
+        return "Backend Development"
+    return "Software Engineering"
+
+
 def upsert_job(conn: connection, job: Job) -> tuple[int, bool]:
     if not job.title or not job.url:
         raise ValueError("Job must have a title and url before persistence.")
 
     ts = now_utc()
-    canonical_url = canonicalize_url(job.url)
     content_hash = job_content_hash(job)
-    source_job_id = str(getattr(job, "source_job_id", "") or "")
-    tags_json = json.dumps(job.tags or [], ensure_ascii=False, sort_keys=True)
+    domains_json = json.dumps(job.tags or [], ensure_ascii=False)
+    country = extract_country(job.location, bool(job.is_remote))
+    city = extract_city(job.location, country)
+    job_type_enum = normalize_job_type(job.job_type, job.title)
+    seniority_enum = infer_seniority(job.title)
+    industry = infer_industry(job.title, job.tags or [])
+    is_taken = bool(getattr(job, "is_taken", False))
 
     with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
         cur.execute('SELECT id FROM jobs WHERE "contentHash" = %s', (content_hash,))
@@ -227,29 +394,43 @@ def upsert_job(conn: connection, job: Job) -> tuple[int, bool]:
             cur.execute(
                 '''
                 UPDATE jobs
-                SET source = %s, title = %s, "applyLink" = %s, "salary" = %s,
-                    "originalSource" = %s, "updatedAt" = %s
+                SET source = %s,
+                    title = %s,
+                    industry = COALESCE(industry, %s),
+                    domains = COALESCE(domains, %s::jsonb),
+                    type = COALESCE(type, %s::"JobType"),
+                    seniority = COALESCE(seniority, %s::"SeniorityLevel"),
+                    "applyLink" = %s,
+                    "salary" = %s,
+                    "originalSource" = %s,
+                    "isTaken" = %s,
+                    "lastCheckedAt" = %s,
+                    "updatedAt" = %s
                 WHERE id = %s
                 ''',
                 (
-                    job.source, job.title, job.url, job.salary or "",
-                    job.original_source or "", ts, job_id
+                    job.source, job.title, industry, domains_json,
+                    job_type_enum, seniority_enum, job.url, job.salary or None,
+                    job.original_source or None, is_taken, ts, ts, job_id
                 )
             )
             return job_id, False
 
-        # 1. Upsert Company
+        # 1. Upsert Company (preserve existing metadata; set HQ country if new)
+        hq_country = None if country == "Remote" else country
         cur.execute(
-            'INSERT INTO companies (name, "updatedAt") VALUES (%s, NOW()) '
-            'ON CONFLICT (name) DO UPDATE SET "updatedAt" = NOW() RETURNING id',
-            (job.company or "Unknown",)
+            'INSERT INTO companies (name, "headquartersCountry", "updatedAt") VALUES (%s, %s, NOW()) '
+            'ON CONFLICT (name) DO UPDATE SET '
+            '"headquartersCountry" = COALESCE(companies."headquartersCountry", EXCLUDED."headquartersCountry"), '
+            '"updatedAt" = NOW() RETURNING id',
+            (job.company or "Unknown", hq_country)
         )
         company_id = cur.fetchone()[0]
 
-        # 2. Upsert Branch
+        # 2. Upsert Branch (match by companyId + country so each country gets its own branch)
         cur.execute(
-            'SELECT id FROM "companyBranches" WHERE "companyId" = %s LIMIT 1',
-            (company_id,)
+            'SELECT id FROM "companyBranches" WHERE "companyId" = %s AND LOWER(COALESCE(country, \'\')) = LOWER(%s) LIMIT 1',
+            (company_id, country)
         )
         branch_row = cur.fetchone()
         if branch_row:
@@ -257,23 +438,32 @@ def upsert_job(conn: connection, job: Job) -> tuple[int, bool]:
         else:
             cur.execute(
                 'INSERT INTO "companyBranches" ("companyId", city, country) VALUES (%s, %s, %s) RETURNING id',
-                (company_id, job.location or "", "")
+                (company_id, city or None, country)
             )
             branch_id = cur.fetchone()[0]
 
-        # 3. Insert Job
+        # 3. Insert Job with full Prisma schema fields
         cur.execute(
             '''
             INSERT INTO jobs (
-                source, title, "companyId", "branchId", "applyLink",
-                "salary", "originalSource", "contentHash", "postedAt", "updatedAt", "isTaken"
+                source, title, "companyId", "branchId",
+                industry, domains, type, seniority,
+                "applyLink", "salary", "originalSource", "contentHash",
+                "postedAt", "lastCheckedAt", "updatedAt", "isTaken"
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, false)
+            VALUES (
+                %s, %s, %s, %s,
+                %s, %s::jsonb, %s::"JobType", %s::"SeniorityLevel",
+                %s, %s, %s, %s,
+                %s, %s, %s, %s
+            )
             RETURNING id
             ''',
             (
-                job.source, job.title, company_id, branch_id, job.url,
-                job.salary or "", job.original_source or "", content_hash, ts, ts
+                job.source, job.title, company_id, branch_id,
+                industry, domains_json, job_type_enum, seniority_enum,
+                job.url, job.salary or None, job.original_source or None, content_hash,
+                ts, ts, ts, is_taken
             )
         )
         row = cur.fetchone()
