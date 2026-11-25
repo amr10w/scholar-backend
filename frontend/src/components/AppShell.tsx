@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { AuthProvider } from "@/src/features/auth/AuthContext";
 import Footer from "./Footer";
 import Header from "./Header";
 
@@ -14,15 +15,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 
-  if (isAuthRoute) {
-    return <>{children}</>;
-  }
-
   return (
-    <>
-      <Header />
-      {children}
-      <Footer />
-    </>
+    <AuthProvider>
+      {isAuthRoute ? (
+        <>{children}</>
+      ) : (
+        <>
+          <Header />
+          {children}
+          <Footer />
+        </>
+      )}
+    </AuthProvider>
   );
 }
