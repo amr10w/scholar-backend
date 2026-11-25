@@ -64,9 +64,12 @@ class StoredJob:
 
 
 def get_postgres_url() -> str:
-    url = os.environ.get("POSTGRES_URL")
+    url = os.environ.get("POSTGRES_URL") or os.environ.get("DATABASE_URL")
     if not url:
-        raise ValueError("POSTGRES_URL environment variable is missing!")
+        raise ValueError(
+            "DATABASE_URL / POSTGRES_URL environment variable is missing! "
+            "Add DATABASE_URL in GitHub Repo -> Settings -> Secrets and variables -> Actions."
+        )
     return url
 
 
@@ -132,6 +135,17 @@ def init_db(conn: connection) -> None:
                 error TEXT DEFAULT '',
                 updated_at TEXT NOT NULL
             );
+        """)
+
+        # Ensure Prisma's scraper columns exist on the shared jobs table
+        cur.execute("""
+            ALTER TABLE jobs
+                ADD COLUMN IF NOT EXISTS "isTaken" BOOLEAN DEFAULT false,
+                ADD COLUMN IF NOT EXISTS "source" TEXT DEFAULT 'manual',
+                ADD COLUMN IF NOT EXISTS "lastCheckedAt" TIMESTAMP(3),
+                ADD COLUMN IF NOT EXISTS "contentHash" TEXT,
+                ADD COLUMN IF NOT EXISTS "originalSource" TEXT,
+                ADD COLUMN IF NOT EXISTS "numberVisited" INTEGER DEFAULT 0;
         """)
 
         cur.execute(
