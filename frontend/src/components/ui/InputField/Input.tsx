@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useState } from "react";
+import { forwardRef, useId, useState } from "react";
 import { InputProps } from "./input.type";
 import EyeIcon from "@iconify-react/mdi/eye";
 import EyeOffIcon from "@iconify-react/mdi/eye-off";
@@ -28,6 +28,8 @@ export const Input = forwardRef<
     ref,
   ) => {
     const [showPassword, setShowPassword] = useState(false);
+    const autoId = useId();
+    const resolvedId = props.id ?? (label ? autoId : undefined);
 
     const isPassword = !multiline && type === "password";
 
@@ -62,6 +64,7 @@ export const Input = forwardRef<
                 className,
               })}
               {...(props as React.ComponentPropsWithoutRef<"textarea">)}
+              id={resolvedId}
             />
           ) : (
             <input
@@ -79,11 +82,17 @@ export const Input = forwardRef<
                 className,
               })}
               {...props}
+              id={resolvedId}
             />
           )}
 
           {label && (
-            <span className={labelVariants({ variant: variant })}>{label}</span>
+            <label
+              htmlFor={resolvedId}
+              className={labelVariants({ variant: variant })}
+            >
+              {label}
+            </label>
           )}
 
           {hasRightIcon && (
