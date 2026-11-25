@@ -170,6 +170,24 @@ describe("jobs & companies data layer", () => {
     });
     expect((await fetchCompanyFacets()).countryCounts.Egypt).toBe(19);
 
+    // Fallback when /companies/filters is missing on the real backend (hits /:id with 400)
+    get
+      .mockRejectedValueOnce(new ApiError(400, "Invalid company ID provided"))
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: [
+            { id: 1, name: "ST", industry: "Semiconductors", size: "10,001+", headquartersCountry: "Egypt" },
+            { id: 2, name: "Siemens EDA", industry: "EDA", size: "5,001-10,000", headquartersCountry: "Egypt" },
+          ],
+          pagination: { total: 2, page: 1, limit: 100, totalPages: 1 },
+        },
+      });
+    const derived = await fetchCompanyFacets();
+    expect(derived.countryCounts).toEqual({ Egypt: 2 });
+    expect(derived.categories).toEqual(["EDA", "Semiconductors"]);
+    expect(derived.sizes).toEqual(["10,001+", "5,001-10,000"]);
+
     get.mockResolvedValueOnce({ data: { success: true, data: { id: 1, name: "ST", jobs: [] } } });
     expect((await fetchCompanyById(1)).name).toBe("ST");
   });
