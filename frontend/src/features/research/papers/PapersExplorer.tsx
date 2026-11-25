@@ -179,7 +179,9 @@ export default function PapersExplorer() {
 
   const loading = !queryReady || result?.key !== key;
   const currentError = result?.key === key ? result.error : undefined;
-  const data = result?.key === key ? result.data : undefined;
+  const data = result?.data;
+  const showInitialSkeleton = loading && !data;
+  const isRefetching = loading && Boolean(data);
   const pagination = data?.pagination;
   const total = pagination?.total ?? 0;
   const first =
@@ -246,7 +248,7 @@ export default function PapersExplorer() {
           }
         >
           <p role="status" className="text-sm text-accent-200">
-            {loading
+            {showInitialSkeleton
               ? "Loading papers…"
               : currentError
                 ? "Papers unavailable"
@@ -255,9 +257,12 @@ export default function PapersExplorer() {
                   : `${total} paper${total === 1 ? "" : "s"}`}
           </p>
 
-          <div aria-busy={loading}>
-            {loading ? (
-              <CatalogCardsSkeleton />
+          <div
+            aria-busy={loading}
+            className={`transition-opacity duration-150 ${isRefetching ? "opacity-60" : "opacity-100"}`}
+          >
+            {showInitialSkeleton ? (
+              <CatalogCardsSkeleton count={12} />
             ) : currentError ? (
               <div
                 role="alert"
@@ -422,12 +427,13 @@ export default function PapersExplorer() {
             )}
           </div>
 
-          {!loading && data && (
+          {!showInitialSkeleton && !currentError && data && (
             <CatalogPagination
               label="Papers pagination"
-              page={data.pagination.page}
+              page={page}
               totalPages={data.pagination.totalPages}
               onPageChange={setPage}
+              disabled={loading}
             />
           )}
         </CatalogLayout>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 interface AccessibleModalProps {
@@ -88,11 +89,11 @@ export default function AccessibleModal({
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4"
       role="presentation"
     >
       <div
@@ -118,6 +119,7 @@ export default function AccessibleModal({
         </button>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

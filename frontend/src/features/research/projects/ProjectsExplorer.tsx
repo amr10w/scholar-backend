@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { Loader2, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import notFoundAnimation from "@/src/components/assets/NotFound.json";
+import CatalogPagination from "@/src/components/catalog/CatalogPagination";
 import Button from "@/src/components/ui/Button/Button";
 import type { Paginated } from "@/src/lib/api-client";
 import { useDebouncedValue } from "@/src/hooks/useDebouncedValue";
@@ -35,15 +36,18 @@ interface ProjectsExplorerProps {
 }
 
 interface Loaded {
-  /** `${filtersKey}#${pages}#${attempt}` the items below belong to */
+  /** `${filtersKey}#${page}#${attempt}` the items below belong to */
   key: string;
   items: GraduationProject[];
+  page: number;
+  limit: number;
   total: number | null;
+  totalPages: number;
   error: string | null;
 }
 
-const requestKey = (key: string, pages: number, attempt: number) =>
-  `${key}#${pages}#${attempt}`;
+const requestKey = (key: string, page: number, attempt: number) =>
+  `${key}#${page}#${attempt}`;
 
 const ProjectsExplorer = ({
   initialPage,
@@ -71,20 +75,23 @@ const ProjectsExplorer = ({
   const appliedKey = filtersKey(applied);
 
   const pending = filtersKey(filters) !== appliedKey;
-  const [pages, setPages] = useState(1);
+  const [page, setPage] = useState(1);
 
   function updateFilters(next: ProjectFilters) {
     setFilters(next);
-    setPages(1);
+    setPage(1);
   }
 
   const [attempt, setAttempt] = useState(0);
-  const wanted = requestKey(appliedKey, pages, attempt);
+  const wanted = requestKey(appliedKey, page, attempt);
 
   const [loaded, setLoaded] = useState<Loaded>(() => ({
     key: requestKey(filtersKey(EMPTY_FILTERS), 1, 0),
     items: initialPage?.data ?? [],
+    page: initialPage?.pagination.page ?? 1,
+    limit: initialPage?.pagination.limit ?? PROJECTS_PAGE_SIZE,
     total: initialPage?.pagination.total ?? null,
+    totalPages: initialPage?.pagination.totalPages ?? 0,
     error: initialPage
       ? null
       : (initialError ?? "Projects are unavailable right now."),
@@ -98,20 +105,19 @@ const ProjectsExplorer = ({
     (async () => {
       try {
         const result = await fetchProjects(
-          { ...applied, page: pages, limit: PROJECTS_PAGE_SIZE },
+          { ...applied, page, limit: PROJECTS_PAGE_SIZE },
           controller.signal,
         );
         if (controller.signal.aborted) return;
-        setLoaded((previous) => ({
+        setLoaded({
           key: wanted,
-          // Load More appends; a new filter (page 1) replaces
-          items:
-            pages === 1
-              ? (result.data ?? [])
-              : [...previous.items, ...(result.data ?? [])],
+          items: result.data ?? [],
+          page: result.pagination.page,
+          limit: result.pagination.limit,
           total: result.pagination.total,
+          totalPages: result.pagination.totalPages,
           error: null,
-        }));
+        });
       } catch (cause) {
         if (controller.signal.aborted) return;
         setLoaded((previous) => ({
@@ -129,9 +135,11 @@ const ProjectsExplorer = ({
   }, [wanted, pending]);
 
   const projects = loaded.items.map(toProjectSummary);
-  const canLoadMore =
-    loaded.total !== null && loaded.items.length < loaded.total;
   const showError = loaded.error && !loading;
+  const total = loaded.total ?? 0;
+  const first = total > 0 ? (loaded.page - 1) * loaded.limit + 1 : 0;
+  const last =
+    total > 0 ? Math.min(loaded.page * loaded.limit, total) : 0;
 
   return (
     <ResearchCatalogSwap
@@ -174,16 +182,9 @@ const ProjectsExplorer = ({
       >
         {!loaded.error && loaded.total !== null && (
           <p role="status" className="text-sm text-accent-200">
-            {loading ? (
-              "Loading projects…"
-            ) : (
-              <>
-                Showing{" "}
-                <span>
-                  {loaded.items.length} of {loaded.total} projects
-                </span>
-              </>
-            )}
+            {total > 0 && first <= last
+              ? `Showing ${first}–${last} of ${total} project${total === 1 ? "" : "s"}`
+              : `${total} project${total === 1 ? "" : "s"}`}
           </p>
         )}
 
@@ -232,7 +233,7 @@ const ProjectsExplorer = ({
           </div>
         ) : (
           <div
-            className={`flex flex-col gap-6 transition-opacity duration-300 ${loading && pages === 1 ? "opacity-60" : "opacity-100"}`}
+            className={`flex flex-col gap-6 transition-opacity duration-150 ${loading ? "opacity-60" : "opacity-100"}`}
             aria-busy={loading}
           >
             <div className={CATALOG_GRID}>
@@ -245,26 +246,13 @@ const ProjectsExplorer = ({
               ))}
             </div>
 
-            {(canLoadMore || (loading && pages > 1)) && (
-              <Button
-                type="button"
-                variant="outlined"
-                intent="accent"
-                size="md"
-                className="self-center"
-                disabled={loading}
-                onClick={() => setPages(pages + 1)}
-              >
-                {loading && pages > 1 ? (
-                  <Loader2
-                    className="size-4 animate-spin"
-                    aria-label="Loading"
-                  />
-                ) : (
-                  "Load More"
-                )}
-              </Button>
-            )}
+            <CatalogPagination
+              label="Projects pagination"
+              page={page}
+              totalPages={loaded.totalPages}
+              onPageChange={setPage}
+              disabled={loading}
+            />
           </div>
         )}
       </CatalogLayout>

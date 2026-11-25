@@ -171,7 +171,7 @@ function toApiWritePayload(
   return payload;
 }
 
-export const PUBLICATIONS_PAGE_SIZE = 10;
+export const PUBLICATIONS_PAGE_SIZE = 12;
 
 export function buildPublicationParams({
   search,

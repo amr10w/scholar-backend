@@ -157,13 +157,13 @@ describe("parseResearcherId", () => {
 });
 
 describe("ResearchersExplorer", () => {
-  it("renders the server first page without refetching and shows loaded-of-total count", () => {
+  it("renders the server first page without refetching and shows range-of-total count", () => {
     render(<ResearchersExplorer initialPage={makePage(RESEARCHERS)} />);
     expect(screen.getAllByRole("article")).toHaveLength(3);
     expect(
       screen.getByPlaceholderText("Search by Researcher Name"),
     ).toBeInTheDocument();
-    expectCountLabel("3 of 3 researchers");
+    expectCountLabel("Showing 1–3 of 3 researchers");
     expect(fetchResearchers).not.toHaveBeenCalled();
   });
 
@@ -216,7 +216,7 @@ describe("ResearchersExplorer", () => {
       expect.any(AbortSignal),
     );
     expect(screen.getAllByRole("article")).toHaveLength(1);
-    expectCountLabel("1 of 1 researcher");
+    expectCountLabel("Showing 1–1 of 1 researcher");
 
     // Reset button restores unfiltered page 1
     fetchResearchers.mockResolvedValueOnce(makePage(RESEARCHERS));
@@ -266,14 +266,14 @@ describe("ResearchersExplorer", () => {
     expect(screen.getAllByRole("article")).toHaveLength(1);
   });
 
-  it("appends pages via Load More without duplicates and hides at the last page", async () => {
+  it("navigates pages via numbered pagination and resets to page 1 on filter change", async () => {
     const page1 = makePage([RESEARCHERS[0], RESEARCHERS[1]], {
       total: 3,
       page: 1,
       limit: 2,
       totalPages: 2,
     });
-    const page2 = makePage([RESEARCHERS[1], RESEARCHERS[2]], {
+    const page2 = makePage([RESEARCHERS[2]], {
       total: 3,
       page: 2,
       limit: 2,
@@ -283,17 +283,16 @@ describe("ResearchersExplorer", () => {
 
     render(<ResearchersExplorer initialPage={page1} />);
     expect(screen.getAllByRole("article")).toHaveLength(2);
-    expectCountLabel("2 of 3 researchers");
+    expectCountLabel("Showing 1–2 of 3 researchers");
 
-    fireEvent.click(screen.getByRole("button", { name: "Load More" }));
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await flushAsync();
 
-    // Duplicate id 2 from page2 is deduplicated; total cards = 3
-    expect(screen.getAllByRole("article")).toHaveLength(3);
-    expectCountLabel("3 of 3 researchers");
-    expect(screen.queryByRole("button", { name: "Load More" })).toBeNull();
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expectCountLabel("Showing 3–3 of 3 researchers");
+    expect(screen.getByRole("button", { name: /Next/i })).toBeDisabled();
 
-    // Searching after Load More and then Reset must return to page 1 (not jump back to page 2)
+    // Searching after paging and then Reset must return to page 1
     fetchResearchers.mockResolvedValueOnce(
       makePage([RESEARCHERS[0]], { total: 1, totalPages: 1 }),
     );
@@ -317,10 +316,10 @@ describe("ResearchersExplorer", () => {
       expect.any(AbortSignal),
     );
     expect(screen.getAllByRole("article")).toHaveLength(2);
-    expectCountLabel("2 of 3 researchers");
+    expectCountLabel("Showing 1–2 of 3 researchers");
   });
 
-  it("keeps loaded cards when Load More fails and retries cleanly", async () => {
+  it("shows error state when page navigation fails and retries cleanly", async () => {
     const page1 = makePage([RESEARCHERS[0], RESEARCHERS[1]], {
       total: 3,
       page: 1,
@@ -330,16 +329,14 @@ describe("ResearchersExplorer", () => {
     fetchResearchers.mockRejectedValueOnce(new Error("Simulated error (500)"));
 
     render(<ResearchersExplorer initialPage={page1} />);
-    fireEvent.click(screen.getByRole("button", { name: "Load More" }));
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await flushAsync();
 
-    // Existing 2 cards stay visible alongside the inline error
-    expect(screen.getAllByRole("article")).toHaveLength(2);
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Simulated error (500)",
     );
 
-    // Retry succeeds and appends page 2
+    // Retry succeeds and shows page 2
     fetchResearchers.mockResolvedValueOnce(
       makePage([RESEARCHERS[2]], {
         total: 3,
@@ -351,7 +348,7 @@ describe("ResearchersExplorer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await flushAsync();
 
-    expect(screen.getAllByRole("article")).toHaveLength(3);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
