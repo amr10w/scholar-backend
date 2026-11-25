@@ -52,4 +52,12 @@ describe("jobs listing", () => {
             orderBy: { postedAt: "desc" }, take: 12, skip: 12,
         }));
     });
+
+    it("filters by source case-insensitively and expands country aliases for map selection", async () => {
+        await listJobs({ source: "linkedin", countries: "Egypt" });
+        const { where } = vi.mocked(db.job.findMany).mock.calls[0][0];
+
+        expect(where.source).toEqual({ equals: "linkedin", mode: "insensitive" });
+        expect(where.branch.country.in).toEqual(expect.arrayContaining(["Egypt", "EG"]));
+    });
 });

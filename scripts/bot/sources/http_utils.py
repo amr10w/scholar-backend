@@ -1,14 +1,32 @@
 """
-Shared HTTP helpers with session reuse, timeouts, and error handling.
+Shared HTTP helpers with session reuse, optional SOCKS5 proxy (Cloudflare WARP),
+timeouts, and error handling.
 """
 
 import logging
+import os
 from curl_cffi import requests
 from config import REQUEST_TIMEOUT
 
 log = logging.getLogger(__name__)
 
-_session = requests.Session(impersonate="chrome")
+_proxy_url = os.environ.get("ALL_PROXY") or os.environ.get("HTTPS_PROXY")
+_proxies = (
+    {"http": _proxy_url, "https": _proxy_url}
+    if _proxy_url
+    else None
+)
+
+_session = requests.Session(impersonate="safari15_3", proxies=_proxies)
+_session.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/html, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+})
 
 
 def get_json(url: str, params: dict = None, headers: dict = None,

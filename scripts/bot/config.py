@@ -7,7 +7,10 @@ import os
 
 # ─── Geo-filtering ──────────────────────────────────────────
 # Jobs in these countries pass regardless of remote/onsite
-ALLOWED_ONSITE_COUNTRIES = {"egypt", "مصر", "saudi arabia", "saudi", "ksa", "السعودية"}
+ALLOWED_ONSITE_COUNTRIES = {
+    "egypt", "مصر", "saudi arabia", "saudi", "ksa", "السعودية",
+    "united arab emirates", "uae", "الإمارات", "united states", "usa",
+}
 
 # Patterns that indicate a location is in Egypt
 EGYPT_PATTERNS = {
@@ -22,6 +25,20 @@ EGYPT_PATTERNS = {
     "new capital", "العاصمة الإدارية", "nasr city", "مدينة نصر",
     "maadi", "المعادي", "heliopolis", "مصر الجديدة", "dokki", "الدقي",
     "mohandessin", "المهندسين",
+}
+
+# Patterns that indicate a location is in the UAE
+UAE_PATTERNS = {
+    "united arab emirates", "uae", "الإمارات", "dubai", "دبي",
+    "abu dhabi", "أبوظبي", "sharjah", "الشارقة",
+    "ajman", "عجمان", "ras al khaimah", "رأس الخيمة",
+}
+
+# Patterns that indicate a location is in the United States
+USA_PATTERNS = {
+    "united states", "united states of america", "usa", " us ", " us,",
+    "america", "new york", "california", "texas", "florida", "washington",
+    "seattle", "san francisco", "los angeles", "chicago", "austin", "boston",
 }
 
 # Patterns that indicate a location is in Saudi Arabia

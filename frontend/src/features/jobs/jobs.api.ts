@@ -11,7 +11,7 @@ import type {
   JobsResponse,
   Seniority,
 } from "./jobs.type";
-import { jobDomains } from "./jobs.utils";
+import { jobDomains, normalizeCountryName } from "./jobs.utils";
 
 export class JobsApiError extends Error {
   readonly status: number;
@@ -109,7 +109,9 @@ export function normalizeJob(raw: unknown): Job {
       name: cleanString(rawCompany.name) ?? "Unknown Company",
       shortName: cleanString(rawCompany.shortName),
       website: safeExternalUrl(cleanString(rawCompany.website)),
-      headquartersCountry: cleanString(rawCompany.headquartersCountry),
+      headquartersCountry: normalizeCountryName(
+        cleanString(rawCompany.headquartersCountry),
+      ),
     },
     branch: {
       id:
@@ -117,7 +119,7 @@ export function normalizeJob(raw: unknown): Job {
           ? rawBranch.id
           : Number(rawBranch.id) || 0,
       city: cleanString(rawBranch.city),
-      country: cleanString(rawBranch.country),
+      country: normalizeCountryName(cleanString(rawBranch.country)),
     },
   };
 }
@@ -189,7 +191,14 @@ export async function fetchJobFacets(signal?: AbortSignal): Promise<JobFacets> {
     );
     const payload = data?.data ?? {};
     const countries = Array.isArray(payload.countries)
-      ? payload.countries.filter((c): c is string => typeof c === "string" && !!c.trim())
+      ? [
+          ...new Set(
+            payload.countries
+              .filter((c): c is string => typeof c === "string" && !!c.trim())
+              .map((c) => normalizeCountryName(c))
+              .filter((c): c is string => Boolean(c)),
+          ),
+        ]
       : [];
     const rawCounts =
       payload.countryCounts && typeof payload.countryCounts === "object"
@@ -198,7 +207,10 @@ export async function fetchJobFacets(signal?: AbortSignal): Promise<JobFacets> {
     const countryCounts: Record<string, number> = {};
     for (const [k, v] of Object.entries(rawCounts)) {
       if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
-        countryCounts[k] = v;
+        const canonical = normalizeCountryName(k);
+        if (canonical) {
+          countryCounts[canonical] = (countryCounts[canonical] ?? 0) + v;
+        }
       }
     }
     const disciplines = Array.isArray(payload.disciplines)
